@@ -2,6 +2,8 @@ import random
 from dataclasses import dataclass, field
 from typing import Dict, Tuple, Optional, List
 
+#John Branch
+
 #constants
 DEFAULT_N_TIMESTEPS = 535
 DEFAULT_BATTERY = 100 * 1
