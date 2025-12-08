@@ -1,30 +1,17 @@
 import numpy as np
+import torch
 from stable_baselines3 import DQN, A2C, PPO
-from stable_baselines3.common.evaluation import evaluate_policy
-from stable_baselines3.common.callbacks import EvalCallback, CheckpointCallback
 from stable_baselines3.common.monitor import Monitor
 import matplotlib.pyplot as plt
 
 from mdp_def import FNAFEnv, TEST_SEEDS
-
+DEVICE = "auto"
 
 def train_dqn(env, total_timesteps=500000):
     """Train DQN agent with Stable-Baselines3."""
     print("")
     print("Training DQN")
     print("")
-    
-    # Use GPU when possible
-    import torch
-    if torch.backends.mps.is_available():
-        device = "mps"
-        print("Using Apple Silicon GPU (MPS)")
-    elif torch.cuda.is_available():
-        device = "cuda"
-        print("Using NVIDIA GPU (CUDA)")
-    else:
-        device = "cpu"
-        print("Using CPU")
     
     model = DQN(
         "MlpPolicy",
@@ -39,10 +26,10 @@ def train_dqn(env, total_timesteps=500000):
         exploration_fraction=0.3,
         exploration_initial_eps=1.0,
         exploration_final_eps=0.05,
-        policy_kwargs=dict(net_arch=[512, 512, 512, 512]),
+        policy_kwargs=dict(net_arch=[256, 256, 256, 256]),
         verbose=1,
         tensorboard_log="./tensorboard_logs/",
-        device=device
+        device=DEVICE
     )
     
     # Train
@@ -60,19 +47,7 @@ def train_a2c(env, total_timesteps=500000):
     print("\n" + "="*60)
     print("Training A2C")
     print("="*60)
-    
-    # Check for MPS (Apple Silicon GPU) availability
-    import torch
-    if torch.backends.mps.is_available():
-        device = "mps"
-        print("Using Apple Silicon GPU (MPS)")
-    elif torch.cuda.is_available():
-        device = "cuda"
-        print("Using NVIDIA GPU (CUDA)")
-    else:
-        device = "cpu"
-        print("Using CPU")
-    
+
     model = A2C(
         "MlpPolicy",
         env,
@@ -86,7 +61,7 @@ def train_a2c(env, total_timesteps=500000):
         policy_kwargs=dict(net_arch=[256, 256]),
         verbose=1,
         tensorboard_log="./tensorboard_logs/",
-        device=device  # Use GPU if available
+        device=DEVICE  # Use GPU if available
     )
     
     # Train
@@ -105,18 +80,6 @@ def train_ppo(env, total_timesteps=500000):
     print("Training PPO")
     print("="*60)
     
-    # Check for MPS (Apple Silicon GPU) availability
-    import torch
-    if torch.backends.mps.is_available():
-        device = "mps"
-        print("Using Apple Silicon GPU (MPS)")
-    elif torch.cuda.is_available():
-        device = "cuda"
-        print("Using NVIDIA GPU (CUDA)")
-    else:
-        device = "cpu"
-        print("Using CPU")
-    
     model = PPO(
         "MlpPolicy",
         env,
@@ -133,7 +96,7 @@ def train_ppo(env, total_timesteps=500000):
         policy_kwargs=dict(net_arch=[256, 256]),
         verbose=1,
         tensorboard_log="./tensorboard_logs/",
-        device=device  # Use GPU if available
+        device=DEVICE
     )
     
     # Train
@@ -305,8 +268,8 @@ if __name__ == "__main__":
     env = Monitor(FNAFEnv(max_timesteps=535, level=3, transition_version=1))
     
     if args.train:
-        # if args.algo in ['dqn', 'all']:
-        #     train_dqn(env, args.timesteps)
+        if args.algo in ['dqn', 'all']:
+            train_dqn(env, args.timesteps)
         
         if args.algo in ['a2c', 'all']:
             train_a2c(env, args.timesteps)

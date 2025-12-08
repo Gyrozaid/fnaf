@@ -2,7 +2,7 @@ from mdp_def import N_ROOMS, ROOM_NAMES, TEST_SEEDS, FNAFEnv
 import numpy as np
 
 def run_heuristic(seed: int):
-    env = FNAFEnv(max_timesteps=535, level=3, transition_version=1)
+    env = FNAFEnv(max_timesteps=535, level=3, transition_version=1, render_mode="human")
     obs, info = env.reset(seed=seed)
     
     total_reward = 0
@@ -31,9 +31,9 @@ def run_heuristic(seed: int):
             action = FNAFEnv.TOGGLE_LEFT_DOOR
         elif not left_threat and env.left_door_closed:
             action = FNAFEnv.TOGGLE_LEFT_DOOR
-        # elif env.np_random.random() < 0.1:
-        #     # Randomly check camera 10% of the time
-        #     action = FNAFEnv.CHECK_CAMERA
+        elif env.np_random.random() < 0.9:
+            # Randomly check on Chica 90% of the time
+            action = FNAFEnv.CHECK_CAMERA_CHICA
         else:
             action = FNAFEnv.NOOP
         
