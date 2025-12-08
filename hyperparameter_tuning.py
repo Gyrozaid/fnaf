@@ -1,0 +1,316 @@
+# hp_tune_sb3_optuna.py
+import os
+import time
+import argparse
+from typing import Dict, Any
+import numpy as np
+import optuna
+
+import torch
+from stable_baselines3 import DQN, A2C, PPO
+from stable_baselines3.common.monitor import Monitor
+from stable_baselines3.common.evaluation import evaluate_policy
+from stable_baselines3.common.vec_env import DummyVecEnv, VecNormalize
+
+from mdp_def import FNAFEnv, TEST_SEEDS
+
+# ---------- Utilities ----------
+def make_env(seed: int = 0, max_timesteps=535, level=3, transition_version=1):
+    def _init():
+        env = FNAFEnv(max_timesteps=max_timesteps, level=level, transition_version=transition_version)
+        env.reset(seed=seed)
+        return env
+    return _init
+
+def choose_device():
+    if torch.backends.mps.is_available():
+        return "mps"
+    if torch.cuda.is_available():
+        return "cuda"
+    return "cpu"
+
+# Evaluate on fixed evaluations (short deterministic)
+def evaluate_model(model, env, n_eval_episodes=5):
+    # model may be SB3 model
+    mean_reward, std_reward = evaluate_policy(model, env, n_eval_episodes=n_eval_episodes, deterministic=True)
+    return mean_reward, std_reward
+
+# ---------- Optuna objective ----------
+def objective(trial: optuna.Trial, algo: str, trial_timesteps: int, seed: int):
+    """
+    Build a model based on trial suggestions, train for a small budget (trial_timesteps),
+    evaluate the model's mean reward and report to Optuna for pruning.
+    """
+    device = choose_device()
+
+    # Common hyperparameter search space
+    lr = trial.suggest_loguniform("learning_rate", 1e-5, 1e-2)
+    gamma = trial.suggest_uniform("gamma", 0.95, 0.9999)
+    net_arch_choice = trial.suggest_categorical("net_arch", ["small", "medium", "large"])
+    if net_arch_choice == "small":
+        net_arch = [128, 128]
+    elif net_arch_choice == "medium":
+        net_arch = [256, 256]
+    else:
+        net_arch = [512, 512, 256]
+
+    policy_kwargs = dict(net_arch=net_arch)
+
+    # Algo specific choices
+    model = None
+    env = DummyVecEnv([make_env(seed)])  # short eval env for training
+    env = VecNormalize(env, norm_obs=True, norm_reward=False, clip_obs=10.)
+
+    if algo == "dqn":
+        batch_size = trial.suggest_categorical("batch_size", [32, 64, 128, 256])
+        buffer_size = trial.suggest_categorical("buffer_size", [10000, 50000, 100000])
+        target_update_interval = trial.suggest_int("target_update_interval", 100, 2000)
+        exploration_fraction = trial.suggest_uniform("exploration_fraction", 0.1, 0.5)
+        exploration_final_eps = trial.suggest_uniform("exploration_final_eps", 0.01, 0.2)
+
+        model = DQN(
+            "MlpPolicy",
+            env,
+            learning_rate=lr,
+            gamma=gamma,
+            batch_size=batch_size,
+            buffer_size=buffer_size,
+            target_update_interval=target_update_interval,
+            exploration_fraction=exploration_fraction,
+            exploration_final_eps=exploration_final_eps,
+            policy_kwargs=policy_kwargs,
+            verbose=0,
+            device=device
+        )
+
+    elif algo == "ppo":
+        n_steps = trial.suggest_categorical("n_steps", [256, 512, 1024, 2048])
+        batch_size = trial.suggest_categorical("batch_size", [32, 64, 128, 256])
+        n_epochs = trial.suggest_int("n_epochs", 3, 20)
+        clip_range = trial.suggest_uniform("clip_range", 0.1, 0.3)
+        ent_coef = trial.suggest_loguniform("ent_coef", 1e-5, 1e-1)
+
+        # Ensure batch_size divides n_steps * n_envs if desired (we use 1 env)
+        model = PPO(
+            "MlpPolicy",
+            env,
+            learning_rate=lr,
+            n_steps=n_steps,
+            batch_size=batch_size,
+            n_epochs=n_epochs,
+            gamma=gamma,
+            clip_range=clip_range,
+            ent_coef=ent_coef,
+            policy_kwargs=policy_kwargs,
+            verbose=0,
+            device=device
+        )
+
+    elif algo == "a2c":
+        n_steps = trial.suggest_categorical("n_steps", [5, 10, 20, 50])
+        ent_coef = trial.suggest_loguniform("ent_coef", 1e-5, 1e-1)
+        vf_coef = trial.suggest_uniform("vf_coef", 0.1, 1.0)
+        max_grad_norm = trial.suggest_uniform("max_grad_norm", 0.3, 1.0)
+
+        model = A2C(
+            "MlpPolicy",
+            env,
+            learning_rate=lr,
+            n_steps=n_steps,
+            gamma=gamma,
+            ent_coef=ent_coef,
+            vf_coef=vf_coef,
+            max_grad_norm=max_grad_norm,
+            policy_kwargs=policy_kwargs,
+            verbose=0,
+            device=device
+        )
+    else:
+        raise ValueError(f"Unknown algorithm: {algo}")
+
+    # Train for trial_timesteps, but report intermediate evaluations so Optuna can prune
+    eval_env = FNAFEnv(max_timesteps=535, level=3, transition_version=1)
+    eval_env = Monitor(eval_env)
+
+    # training loop with intermediate evaluation and pruning checks
+    total_steps = 0
+    eval_interval = max(1000, trial_timesteps // 5)  # run a few intermediate evals
+    while total_steps < trial_timesteps:
+        # train a chunk
+        chunk = min(eval_interval, trial_timesteps - total_steps)
+        model.learn(total_timesteps=chunk, reset_num_timesteps=False, progress_bar=False)
+        total_steps += chunk
+
+        # evaluate
+        mean_reward, std_reward = evaluate_model(model, eval_env, n_eval_episodes=3)
+        # report to optuna
+        trial.report(mean_reward, total_steps)
+
+        # prune if needed
+        if trial.should_prune():
+            model.env.close()
+            eval_env.close()
+            raise optuna.exceptions.TrialPruned()
+
+    # final eval after full budget
+    mean_reward, std_reward = evaluate_model(model, eval_env, n_eval_episodes=5)
+
+    # Save the model temporarily for this trial if you'd like (optional)
+    # model.save(f"optuna_tmp/{algo}_trial{trial.number}")
+
+    model.env.close()
+    eval_env.close()
+
+    # We want to maximize mean_reward
+    return mean_reward
+
+# ---------- High level runner ----------
+def run_study(algo: str, n_trials: int, trial_timesteps: int, seed: int, study_name: str, storage: str = None):
+    sampler = optuna.samplers.TPESampler(seed=seed)
+    pruner = optuna.pruners.MedianPruner(n_startup_trials=5, n_warmup_steps=0, interval_steps=1)
+    study = optuna.create_study(direction="maximize", sampler=sampler, pruner=pruner, study_name=study_name, storage=storage, load_if_exists=True)
+
+    def _objective(trial):
+        return objective(trial, algo=algo, trial_timesteps=trial_timesteps, seed=seed)
+
+    study.optimize(_objective, n_trials=n_trials, gc_after_trial=True, n_jobs=1)
+
+    print("Study finished. Best trial:")
+    trial = study.best_trial
+    print(f"  Value: {trial.value}")
+    print("  Params: ")
+    for k, v in trial.params.items():
+        print(f"    {k}: {v}")
+
+    # Save best hyperparameters to file
+    os.makedirs("hp_results", exist_ok=True)
+    outpath = os.path.join("hp_results", f"best_params_{algo}.json")
+    import json
+    with open(outpath, "w") as f:
+        json.dump({"value": trial.value, "params": trial.params}, f, indent=2)
+    print(f"Saved best params to {outpath}")
+    return trial.params
+
+# ---------- Train final model with best params ----------
+def train_final_with_params(algo: str, params: Dict[str, Any], total_timesteps: int, model_output_path: str):
+    device = choose_device()
+    env = Monitor(FNAFEnv(max_timesteps=535, level=3, transition_version=1))
+    if algo == "dqn":
+        model = DQN(
+            "MlpPolicy",
+            env,
+            learning_rate=params.get("learning_rate", 1e-3),
+            gamma=params.get("gamma", 0.995),
+            batch_size=params.get("batch_size", 64),
+            buffer_size=params.get("buffer_size", 50000),
+            target_update_interval=params.get("target_update_interval", 500),
+            exploration_fraction=params.get("exploration_fraction", 0.3),
+            exploration_final_eps=params.get("exploration_final_eps", 0.05),
+            policy_kwargs=dict(net_arch=_net_from_choice(params.get("net_arch"))),
+            verbose=1,
+            device=device
+        )
+    elif algo == "ppo":
+        model = PPO(
+            "MlpPolicy",
+            env,
+            learning_rate=params.get("learning_rate", 3e-4),
+            n_steps=params.get("n_steps", 2048),
+            batch_size=params.get("batch_size", 64),
+            n_epochs=params.get("n_epochs", 10),
+            gamma=params.get("gamma", 0.99),
+            clip_range=params.get("clip_range", 0.2),
+            ent_coef=params.get("ent_coef", 0.01),
+            policy_kwargs=dict(net_arch=_net_from_choice(params.get("net_arch"))),
+            verbose=1,
+            device=device
+        )
+    elif algo == "a2c":
+        model = A2C(
+            "MlpPolicy",
+            env,
+            learning_rate=params.get("learning_rate", 3e-4),
+            n_steps=params.get("n_steps", 5),
+            gamma=params.get("gamma", 0.99),
+            ent_coef=params.get("ent_coef", 0.01),
+            vf_coef=params.get("vf_coef", 0.5),
+            policy_kwargs=dict(net_arch=_net_from_choice(params.get("net_arch"))),
+            verbose=1,
+            device=device
+        )
+    else:
+        raise ValueError("Unknown algo")
+
+    model.learn(total_timesteps=total_timesteps, progress_bar=True)
+    model.save(model_output_path)
+    print(f"Saved final model to {model_output_path}")
+    env.close()
+    return model
+
+def _net_from_choice(choice):
+    # If Optuna saved the net_arch choice as a string, map back
+    if isinstance(choice, list):
+        return choice
+    if choice == "small":
+        return [128, 128]
+    if choice == "medium":
+        return [256, 256]
+    return [512, 512, 256]
+
+# ---------- Evaluate best model on TEST_SEEDS ----------
+def evaluate_on_test_seeds_path(model_path: str, model_class_name: str):
+    # load model and run the evaluation procedure you already have
+    if model_class_name.lower() == "dqn":
+        model = DQN.load(model_path)
+    elif model_class_name.lower() == "ppo":
+        model = PPO.load(model_path)
+    elif model_class_name.lower() == "a2c":
+        model = A2C.load(model_path)
+    else:
+        raise ValueError("Unknown model for loading")
+
+    # Evaluate using your TEST_SEEDS
+    episode_rewards = []
+    episode_lengths = []
+    for i, seed in enumerate(TEST_SEEDS):
+        env = FNAFEnv(max_timesteps=535, level=3, transition_version=1)
+        obs, _ = env.reset(seed=seed)
+
+        ep_r = 0.0
+        ep_len = 0
+        terminated = False
+        truncated = False
+        while not (terminated or truncated):
+            action, _ = model.predict(obs, deterministic=True)
+            obs, reward, terminated, truncated, info = env.step(action)
+            ep_r += reward
+            ep_len += 1
+
+        episode_rewards.append(ep_r)
+        episode_lengths.append(ep_len)
+        print(f"Seed {seed}: reward={ep_r:.2f}, len={ep_len}")
+        env.close()
+
+    print(f"Average reward: {np.mean(episode_rewards):.2f} ± {np.std(episode_rewards):.2f}")
+    return episode_rewards, episode_lengths
+
+if __name__ == "__main__":
+    parser = argparse.ArgumentParser()
+    parser.add_argument("--algo", type=str, choices=["dqn", "ppo", "a2c"], required=True)
+    parser.add_argument("--n-trials", type=int, default=40, help="Number of optuna trials")
+    parser.add_argument("--trial-timesteps", type=int, default=10000, help="Training timesteps per optuna trial")
+    parser.add_argument("--seed", type=int, default=42)
+    parser.add_argument("--final-timesteps", type=int, default=300000, help="Train final model with best params for these timesteps")
+    parser.add_argument("--study-name", type=str, default=None)
+    args = parser.parse_args()
+
+    study_name = args.study_name or f"fnaf_{args.algo}_study"
+    best_params = run_study(algo=args.algo, n_trials=args.n_trials, trial_timesteps=args.trial_timesteps, seed=args.seed, study_name=study_name)
+
+    # Train final model with best params
+    model_out = f"models/fnaf_{args.algo}_best"
+    os.makedirs("models", exist_ok=True)
+    final_model = train_final_with_params(args.algo, best_params, total_timesteps=args.final_timesteps, model_output_path=model_out)
+
+    # Evaluate final model on TEST_SEEDS
+    evaluate_on_test_seeds_path(model_out + ".zip", args.algo)
