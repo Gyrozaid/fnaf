@@ -41,20 +41,25 @@ def run_heuristic(seed: int):
         total_reward += reward
         
         if terminated or truncated:
-            print(f"\nEpisode ended at t={env.timestep}")
-            print(f"Info: {info}")
+            # print(f"\nEpisode ended at t={env.timestep}")
+            # print(f"Info: {info}")
             break
     
-    print(f"\nTotal reward: {total_reward}")
+    # print(f"\nTotal reward: {total_reward}")
     env.close()
 
-    return total_reward
+    return total_reward, env.timestep
 # Example usage
 if __name__ == "__main__":
-    reward_sum = []
-    for seed in TEST_SEEDS:
-        total_reward = run_heuristic(seed)
-        reward_sum.append(total_reward)
-
-    print("\nHEURISTIC" )
-    print("Average Reward over 10 evaluation iterations: ", np.average(reward_sum))
+    """Evaluate the heuristic"""
+    episode_rewards = []
+    episode_lengths = []
+    
+    for i, seed in enumerate(TEST_SEEDS):
+        episode_reward, episode_length = run_heuristic(seed)
+        episode_rewards.append(episode_reward)
+        episode_lengths.append(episode_length)
+        
+        print(f"Eval Episode {i + 1}: Reward = {episode_reward:.2f}, Length = {episode_length:.2f}")
+    
+    print(f"\nAverage Reward: {np.mean(episode_rewards):.2f} \nAverage Length: {np.mean(episode_lengths):.2f}")

@@ -285,7 +285,7 @@ if __name__ == "__main__":
     #     env, agent, num_episodes=4000, print_freq=100
     # )
     
-    # # Save trained model
+    # Save trained model
     # model_path = "models/fnaf_dqn_model.pt"
     # agent.save(model_path)
     # print("\nModel saved to, " + model_path)
