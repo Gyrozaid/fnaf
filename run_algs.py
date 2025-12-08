@@ -281,8 +281,9 @@ def plot_comparison(results):
     ax.grid(axis='y', alpha=0.3)
     
     plt.tight_layout()
-    plt.savefig('sb3_comparison.png', dpi=150, bbox_inches='tight')
-    print("\nComparison plot saved to 'sb3_comparison.png'")
+    pathname = "figs/sb3_comparison.png"
+    plt.savefig(pathname, dpi=150, bbox_inches='tight')
+    print("\nComparison plot saved to, ", pathname)
     plt.show()
 
 
@@ -317,9 +318,9 @@ if __name__ == "__main__":
     
     if not args.train and not args.eval:
         print("Usage:")
-        print("  Train: python training.py --train [--algo dqn/a2c/ppo/all] [--timesteps 500000]")
-        print("  Eval:  python training.py --eval")
-        print("  Both:  python training.py --train --eval")
+        print("  Train: python run_algs.py --train [--algo dqn/a2c/ppo/all] [--timesteps 500000]")
+        print("  Eval:  python run_algs.py --eval")
+        print("  Both:  python run_algs.py --train --eval")
 
         # RUN in new terminal to view live training:
         # tensorboard --logdir ./tensorboard_logs/
