@@ -1,4 +1,3 @@
-# hp_tune_sb3_optuna.py
 import os
 import time
 import argparse
@@ -14,7 +13,6 @@ from stable_baselines3.common.vec_env import DummyVecEnv, VecNormalize
 
 from mdp_def import FNAFEnv, TEST_SEEDS
 
-# ---------- Utilities ----------
 def make_env(seed: int = 0, max_timesteps=535, level=3, transition_version=1):
     def _init():
         env = FNAFEnv(max_timesteps=max_timesteps, level=level, transition_version=transition_version)
@@ -29,21 +27,21 @@ def choose_device():
         return "cuda"
     return "cpu"
 
-# Evaluate on fixed evaluations (short deterministic)
+#evaluate deterministic policies
 def evaluate_model(model, env, n_eval_episodes=5):
-    # model may be SB3 model
     mean_reward, std_reward = evaluate_policy(model, env, n_eval_episodes=n_eval_episodes, deterministic=True)
     return mean_reward, std_reward
 
-# ---------- Optuna objective ----------
+#objective functions
 def objective(trial: optuna.Trial, algo: str, trial_timesteps: int, seed: int):
     """
     Build a model based on trial suggestions, train for a small budget (trial_timesteps),
     evaluate the model's mean reward and report to Optuna for pruning.
     """
+    
     device = choose_device()
 
-    # Common hyperparameter search space
+    #standard hyperparams for tuning
     lr = trial.suggest_loguniform("learning_rate", 1e-5, 1e-2)
     gamma = trial.suggest_uniform("gamma", 0.95, 0.9999)
     net_arch_choice = trial.suggest_categorical("net_arch", ["small", "medium", "large"])
@@ -56,11 +54,11 @@ def objective(trial: optuna.Trial, algo: str, trial_timesteps: int, seed: int):
 
     policy_kwargs = dict(net_arch=net_arch)
 
-    # Algo specific choices
     model = None
-    env = DummyVecEnv([make_env(seed)])  # short eval env for training
+    env = DummyVecEnv([make_env(seed)])
     env = VecNormalize(env, norm_obs=True, norm_reward=False, clip_obs=10.)
 
+    #create models
     if algo == "dqn":
         batch_size = trial.suggest_categorical("batch_size", [32, 64, 128, 256])
         buffer_size = trial.suggest_categorical("buffer_size", [10000, 50000, 100000])
@@ -90,7 +88,7 @@ def objective(trial: optuna.Trial, algo: str, trial_timesteps: int, seed: int):
         clip_range = trial.suggest_uniform("clip_range", 0.1, 0.3)
         ent_coef = trial.suggest_loguniform("ent_coef", 1e-5, 1e-1)
 
-        # Ensure batch_size divides n_steps * n_envs if desired (we use 1 env)
+        #make sure that batch_size divides n_steps * n_envs evenly
         model = PPO(
             "MlpPolicy",
             env,
@@ -128,43 +126,42 @@ def objective(trial: optuna.Trial, algo: str, trial_timesteps: int, seed: int):
     else:
         raise ValueError(f"Unknown algorithm: {algo}")
 
-    # Train for trial_timesteps, but report intermediate evaluations so Optuna can prune
+    #create fnaf env
     eval_env = FNAFEnv(max_timesteps=535, level=3, transition_version=1)
     eval_env = Monitor(eval_env)
 
-    # training loop with intermediate evaluation and pruning checks
+    #train
     total_steps = 0
-    eval_interval = max(1000, trial_timesteps // 5)  # run a few intermediate evals
+    eval_interval = max(1000, trial_timesteps // 5)
     while total_steps < trial_timesteps:
-        # train a chunk
         chunk = min(eval_interval, trial_timesteps - total_steps)
         model.learn(total_timesteps=chunk, reset_num_timesteps=False, progress_bar=False)
         total_steps += chunk
 
-        # evaluate
+        #evaluate training
         mean_reward, std_reward = evaluate_model(model, eval_env, n_eval_episodes=3)
-        # report to optuna
+        
+        #report to optuna for tuning
         trial.report(mean_reward, total_steps)
 
-        # prune if needed
+        #optuna stuff lol
         if trial.should_prune():
             model.env.close()
             eval_env.close()
             raise optuna.exceptions.TrialPruned()
 
-    # final eval after full budget
+    #final evaluation
     mean_reward, std_reward = evaluate_model(model, eval_env, n_eval_episodes=5)
 
-    # Save the model temporarily for this trial if you'd like (optional)
-    # model.save(f"optuna_tmp/{algo}_trial{trial.number}")
+    #save trial model (you can comment this out if you want)
+    model.save(f"optuna_tmp/{algo}_trial{trial.number}")
 
     model.env.close()
     eval_env.close()
 
-    # We want to maximize mean_reward
     return mean_reward
 
-# ---------- High level runner ----------
+#main hyperparameter tuning runner
 def run_study(algo: str, n_trials: int, trial_timesteps: int, seed: int, study_name: str, storage: str = None):
     sampler = optuna.samplers.TPESampler(seed=seed)
     pruner = optuna.pruners.MedianPruner(n_startup_trials=5, n_warmup_steps=0, interval_steps=1)
@@ -182,7 +179,7 @@ def run_study(algo: str, n_trials: int, trial_timesteps: int, seed: int, study_n
     for k, v in trial.params.items():
         print(f"    {k}: {v}")
 
-    # Save best hyperparameters to file
+    #save hyperparameters
     os.makedirs("hp_results", exist_ok=True)
     outpath = os.path.join("hp_results", f"best_params_{algo}.json")
     import json
@@ -191,7 +188,7 @@ def run_study(algo: str, n_trials: int, trial_timesteps: int, seed: int, study_n
     print(f"Saved best params to {outpath}")
     return trial.params
 
-# ---------- Train final model with best params ----------
+#train model with the best found hyperparams
 def train_final_with_params(algo: str, params: Dict[str, Any], total_timesteps: int, model_output_path: str):
     device = choose_device()
     env = Monitor(FNAFEnv(max_timesteps=535, level=3, transition_version=1))
@@ -247,8 +244,8 @@ def train_final_with_params(algo: str, params: Dict[str, Any], total_timesteps: 
     env.close()
     return model
 
+#weird optuna stuff
 def _net_from_choice(choice):
-    # If Optuna saved the net_arch choice as a string, map back
     if isinstance(choice, list):
         return choice
     if choice == "small":
@@ -257,9 +254,9 @@ def _net_from_choice(choice):
         return [256, 256]
     return [512, 512, 256]
 
-# ---------- Evaluate best model on TEST_SEEDS ----------
+#seeded evaluation
 def evaluate_on_test_seeds_path(model_path: str, model_class_name: str):
-    # load model and run the evaluation procedure you already have
+    #load in saved models
     if model_class_name.lower() == "dqn":
         model = DQN.load(model_path)
     elif model_class_name.lower() == "ppo":
@@ -269,7 +266,7 @@ def evaluate_on_test_seeds_path(model_path: str, model_class_name: str):
     else:
         raise ValueError("Unknown model for loading")
 
-    # Evaluate using your TEST_SEEDS
+    #seeded evaluation
     episode_rewards = []
     episode_lengths = []
     for i, seed in enumerate(TEST_SEEDS):
@@ -307,10 +304,10 @@ if __name__ == "__main__":
     study_name = args.study_name or f"fnaf_{args.algo}_study"
     best_params = run_study(algo=args.algo, n_trials=args.n_trials, trial_timesteps=args.trial_timesteps, seed=args.seed, study_name=study_name)
 
-    # Train final model with best params
+    #final training
     model_out = f"models/fnaf_{args.algo}_best"
     os.makedirs("models", exist_ok=True)
     final_model = train_final_with_params(args.algo, best_params, total_timesteps=args.final_timesteps, model_output_path=model_out)
 
-    # Evaluate final model on TEST_SEEDS
+    #final evaluation
     evaluate_on_test_seeds_path(model_out + ".zip", args.algo)
