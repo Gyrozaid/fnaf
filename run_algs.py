@@ -224,6 +224,7 @@ def compare_all_methods():
     
     print(f"\nHeuristic Results:")
     print(f"  Average Reward: {np.mean(heuristic_rewards):.2f} ± {np.std(heuristic_rewards):.2f}")
+    print(f"  Average Length: {np.mean(heuristic_lengths):.2f} ± {np.std(heuristic_lengths):.2f}")
     
     # 2. Load and evaluate trained models
     env_class = FNAFEnv
