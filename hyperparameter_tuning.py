@@ -13,6 +13,11 @@ from stable_baselines3.common.vec_env import DummyVecEnv, VecNormalize
 
 from mdp_def import FNAFEnv, TEST_SEEDS
 
+#EXAMPLE USAGE IN TERMINAL
+#python hp_tune_sb3_optuna.py --algo ppo --n-trials 40 --trial-timesteps 10000 --final-timesteps 300000
+#pass in what algo you want to tune, number of trials to tune for, timesteps to tune for, and timesteps for the final evaluation
+#keep trial timesteps lower to save time on training
+
 def make_env(seed: int = 0, max_timesteps=535, level=3, transition_version=1):
     def _init():
         env = FNAFEnv(max_timesteps=max_timesteps, level=level, transition_version=transition_version)
@@ -311,3 +316,4 @@ if __name__ == "__main__":
 
     #final evaluation
     evaluate_on_test_seeds_path(model_out + ".zip", args.algo)
+
