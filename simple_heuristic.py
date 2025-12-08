@@ -2,7 +2,7 @@ from mdp_def import N_ROOMS, ROOM_NAMES, TEST_SEEDS, FNAFEnv
 import numpy as np
 
 def run_heuristic(seed: int):
-    env = FNAFEnv(max_timesteps=535, level=3, transition_version=1, render_mode="human")
+    env = FNAFEnv(render_mode="human")
     obs, info = env.reset(seed=seed)
     
     total_reward = 0

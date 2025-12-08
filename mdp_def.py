@@ -5,14 +5,12 @@ import gymnasium as gym
 from gymnasium import spaces
 import numpy as np
 
-# John Branch
-
-# Constants
+# MDP Constants
 DEFAULT_N_TIMESTEPS = 535
 DEFAULT_BATTERY = 100
 ROOM_NAMES = ["Stage", "Hallway", "Office Entry", "ATTACK"]
 N_ROOMS = len(ROOM_NAMES)
-ANIMATRONICS = ["Chica"]
+ANIMATRONICS = ["Chica", "Freddy"]
 
 # Random Seeds for evaluation, allows for direct comparison between evaluation results
 TEST_SEEDS = [42, 43, 44, 45, 46, 47, 48, 49, 50, 51]
@@ -20,40 +18,27 @@ TEST_SEEDS = [42, 43, 44, 45, 46, 47, 48, 49, 50, 51]
 @dataclass
 class AnimState:
     name: str
-    location: int = 0  # index of room name
-    in_office: bool = True  # has MDP terminated
-    focused: bool = False # is being focused by camera
+    location: int = 0  # index of the animatronic's room name
+    in_office: bool = True  # has the animatronic breached the player's defense?
+    focused: bool = False # is the animatronic being focused by the camera?
 
 class FNAFEnv(gym.Env):
-    """Five Nights at Freddy's inspired Gymnasium environment.
-    
-    The agent must survive by managing battery resources and door controls
-    to prevent animatronics from attacking.
-    """
-    
-    metadata = {"render_modes": ["human", "ansi"], "render_fps": 1}
-    
     # Action constants
     TOGGLE_LEFT_DOOR = 0
     TOGGLE_RIGHT_DOOR = 1
     CHECK_CAMERA_CHICA = 2
-    NOOP = 3
+    CHECK_CAMERA_FREDDY = 3
+    NOOP = 4
     
-    def __init__(
-        self,
-        max_timesteps: int = DEFAULT_N_TIMESTEPS,
-        level: int = 1,
-        transition_version: int = 1,
-        render_mode: Optional[str] = None
-    ):
+    def __init__(self, max_timesteps = DEFAULT_N_TIMESTEPS, render_mode = None):
         super().__init__()
         
         self.max_timesteps = max_timesteps
-        self.level = level
-        self.transition_version = transition_version
         self.render_mode = render_mode
         
-        # Battery consumption map
+        # Battery consumption map 
+        # key = energy consumption level
+        # value = battery used
         self.battery_consumption_map = {
             0: 1,  # no door/camera
             1: 2,  # one of door or camera
@@ -62,14 +47,14 @@ class FNAFEnv(gym.Env):
         }
         
         # Mapping which animatronic attacks which door
-        self.attack_door_map = {"Bonnie": "left", "Chica": "right"}
+        self.attack_door_map = {"Freddy": "left", "Chica": "right"}
         
-        # Simplified action space: just NOOP + Toggling each door + Focusing camera on each animatronic + focusing on none
+        # Simplified action space: NOOP + Toggling each door + Focusing camera on each animatronic
         self.action_space = spaces.Discrete(3 + len(ANIMATRONICS))
         
         # Define observation space
         obs_dim = (
-            2 +  # timestep, battery
+            2 +  # timestep + battery
             2 +  # door states
             len(ANIMATRONICS) * 3  # per anim: location, in_office, focused
         )
@@ -85,20 +70,9 @@ class FNAFEnv(gym.Env):
         self.anims: Dict[str, AnimState] = {}
         self.np_random = None
     
-    def reset(
-        self,
-        seed: Optional[int] = None,
-        options: Optional[Dict[str, Any]] = None
-    ) -> Tuple[np.ndarray, Dict[str, Any]]:
+    def reset(self, seed = None):
         """Reset the environment to initial state."""
         super().reset(seed=seed)
-        
-        # Handle options
-        if options:
-            if 'level' in options:
-                self.level = options['level']
-            if 'transition_version' in options:
-                self.transition_version = options['transition_version']
         
         # Reset state
         self.timestep = 0
@@ -109,66 +83,62 @@ class FNAFEnv(gym.Env):
         # Reset animatronics
         self.anims = {}
         for anim_name in ANIMATRONICS:
-            self.anims[anim_name] = AnimState(
-                name=anim_name,
-                location=0,
-                in_office=False,
-                focused=False
-            )
+            self.anims[anim_name] = AnimState(name=anim_name, location=0, in_office=False, focused=False)
         
         obs = self._get_obs()
         info = self._get_info()
         
         return obs, info
     
-    def _battery_cost_for_action(
-        self,
-        will_use_left: bool,
-        will_use_right: bool,
-        will_use_camera: bool
-    ) -> int:
+    def _battery_cost_for_action(self, will_use_left: bool, will_use_right: bool, will_use_camera: bool):
         """Calculate battery cost based on resource usage."""
         count = int(will_use_left) + int(will_use_right) + int(will_use_camera)
-        count = max(0, min(3, count))
         return self.battery_consumption_map[count]
     
-    def _attempt_anim_move(self, anim: AnimState) -> None:
+    def _attempt_anim_move(self, anim: AnimState):
         """Attempt to move an animatronic."""
+        # If the animatronic is focused by the camera, no movement will occur.
         if anim.focused:
             return
         
         # Determine probability of advancing
-        if self.transition_version == 1:
-            p_adv = 0.5 * (1/5)
-        else:
-            p_adv = (float(self.level) / 20.0) * (1/5)
-            p_adv = max(0.0, min(1.0, p_adv)) 
+        p_adv = 0.5 * (1/5)
         
+        # Check if advancement occurs or not
         if self.np_random.random() < p_adv:
             # Advance toward ATTACK room
             attack_idx = ROOM_NAMES.index("ATTACK")
             if anim.location < attack_idx:
                 anim.location += 1
     
-    def _check_death(self) -> Tuple[bool, Optional[str]]:
+    def _check_death(self):
         """Check if any animatronic attacks the player."""
         attack_idx = ROOM_NAMES.index("ATTACK")
         
-        for name, anim in self.anims.items():
-            if anim.in_office:
+        for anim_name, anim_state in self.anims.items():
+            # If animatronic is already in office, ignore it
+            if anim_state.in_office:
                 continue
-            if anim.location >= attack_idx:
-                side = self.attack_door_map.get(name, "left")
+            if anim_state.location >= attack_idx:
+                side = self.attack_door_map.get(anim_name, "left")
                 door_closed = (
                     self.left_door_closed if side == "left" 
                     else self.right_door_closed
                 )
+                # If the door isn't closed when they try to attack, they enter the office and succesfully attack the player
                 if not door_closed:
-                    anim.in_office = True
-                    return True, name
+                    anim_state.in_office = True
+                    return True, anim_name
+                # If the door is closed when they try to attack, reset the animatronic's location
                 else:
-                    #Reset animatronic location if it tries to attack and the door is closed
-                    anim.location = 0
+                    # Reset animatronic location if it tries to attack and the door is closed
+                    # Chica goes all the way back to the start (stage)
+                    if anim_name == "Chica":
+                        anim_state.location = 0
+                    # Freddy goes just one space back
+                    else:
+                        anim_state.location = min(anim_state.location - 1, 0)
+
                     return False, None
         
         return False, None
@@ -181,11 +151,13 @@ class FNAFEnv(gym.Env):
         using_right = self.right_door_closed
         using_camera = False
         for anim_name, anim_state in self.anims.items():
-                if anim_state.focused:
-                    using_camera = True
-                    break
+            if anim_state.focused:
+                using_camera = True
+                break
         
         # Execute action
+
+        # Door usage
         if action == self.TOGGLE_LEFT_DOOR:
             self.left_door_closed = not self.left_door_closed
             using_left = self.left_door_closed
@@ -199,6 +171,10 @@ class FNAFEnv(gym.Env):
                 curr_location_idx = self.anims["Chica"].location
                 self.anims["Chica"].location = max(0, curr_location_idx - 1)
                 self.anims["Chica"].focused = True
+                using_camera = True
+            if action == self.CHECK_CAMERA_FREDDY:
+                # Causes Freddy to freeze in place.
+                self.anims["Freddy"].focused = True
                 using_camera = True
         elif action == self.NOOP:
             pass
@@ -267,8 +243,8 @@ class FNAFEnv(gym.Env):
         
         return np.array(obs, dtype=np.float32)
     
-    def _get_info(self) -> Dict[str, Any]:
-        """Get auxiliary information."""
+    def _get_info(self):
+        """Get MDP information."""
         return {
             'timestep': self.timestep,
             'battery': self.battery,
@@ -289,8 +265,8 @@ class FNAFEnv(gym.Env):
         elif self.render_mode == "human":
             print(self._render_ansi())
     
-    def _render_ansi(self) -> str:
-        """Create ASCII representation of the environment."""
+    def _render_ansi(self):
+        """Create string representation of the environment."""
         lines = []
         lines.append(f"=== FNAF Environment (t={self.timestep}/{self.max_timesteps}) ===")
         lines.append(f"Battery: {self.battery}%")

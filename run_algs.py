@@ -119,7 +119,7 @@ def evaluate_on_test_seeds(model, env_class, model_name):
     episode_lengths = []
     
     for i, seed in enumerate(TEST_SEEDS):
-        env = env_class(max_timesteps=535, level=3, transition_version=1)
+        env = env_class()
         obs, _ = env.reset(seed=seed)
         
         episode_reward = 0
@@ -265,7 +265,7 @@ if __name__ == "__main__":
     args = parser.parse_args()
     
     # Create environment
-    env = Monitor(FNAFEnv(max_timesteps=535, level=3, transition_version=1))
+    env = Monitor(FNAFEnv())
     
     if args.train:
         if args.algo in ['dqn', 'all']:
