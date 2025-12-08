@@ -4,4 +4,4 @@ __pycache__/
 tensorboard_logs/DQN_1/events.out.tfevents.1765151837.vl965-172-31-120-203.wireless.umass.edu.6802.0
 __pycache__/mdp_def.cpython-314.pyc
 models/
-figs/sb3_comparison.png
+figs/
