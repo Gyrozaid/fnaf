@@ -265,12 +265,13 @@ def compare_all_methods():
 
 def plot_comparison(results):
     """Create comparison visualization."""
+    plt.figure()
     fig, ax = plt.subplots(figsize=(10, 6))
     
     names = [r['name'] for r in results]
     rewards = [r['rewards'] for r in results]
     
-    bp = ax.boxplot(rewards, labels=names, patch_artist=True)
+    bp = ax.boxplot(rewards, tick_labels=names, patch_artist=True)
     
     colors = ['lightblue', 'lightgreen', 'lightcoral', 'lightyellow']
     for patch, color in zip(bp['boxes'], colors[:len(results)]):
@@ -284,7 +285,6 @@ def plot_comparison(results):
     pathname = "figs/sb3_comparison.png"
     plt.savefig(pathname, dpi=150, bbox_inches='tight')
     print("\nComparison plot saved to, ", pathname)
-    plt.show()
 
 
 if __name__ == "__main__":
