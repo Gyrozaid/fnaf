@@ -288,5 +288,5 @@ class FNAFEnv(gym.Env):
         for name, anim in self.anims.items():
             lines.append(f"  {name}: {ROOM_NAMES[anim.location]}")
             camera_status = "YES" if anim.focused else "NO"
-            lines.append(f"  {"Camera focused?"} {camera_status}\n")
+            lines.append(f"  Camera focused? {camera_status}\n")
         return "\n".join(lines) + "\n"
