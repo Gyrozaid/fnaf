@@ -17,6 +17,7 @@ from mdp_def import FNAFEnv, TEST_SEEDS
 
 #EXAMPLE USAGE IN TERMINAL
 #python hyperparameter_tuning.py --algo ppo --n-trials 40 --trial-timesteps 10000 --final-timesteps 300000
+#use --skip-hparam to skip tuning and just evaluate a tuned model. Implemented so you don't have to rerun tuning if eval fails
 #pass in what algo you want to tune, number of trials to tune for, timesteps to tune for, and timesteps for the final evaluation
 #keep trial timesteps lower to save time on training
 
@@ -148,7 +149,7 @@ def objective(trial: optuna.Trial, algo: str, trial_timesteps: int, seed: int):
         #report to optuna for tuning
         trial.report(mean_reward, total_steps)
 
-        #optuna stuff lol
+        #prune away trials that obviously won't be high performers
         if trial.should_prune():
             model.env.close()
             eval_env.close()
@@ -167,10 +168,10 @@ def objective(trial: optuna.Trial, algo: str, trial_timesteps: int, seed: int):
 
 
 #main hyperparameter tuning runner
-def run_study(algo: str, n_trials: int, trial_timesteps: int, seed: int, study_name: str, storage: str = None):
+def run_study(algo: str, n_trials: int, trial_timesteps: int, seed: int, study_name: str):
     sampler = optuna.samplers.TPESampler(seed=seed)
     pruner = optuna.pruners.MedianPruner(n_startup_trials=5, n_warmup_steps=0, interval_steps=1)
-    study = optuna.create_study(direction="maximize", sampler=sampler, pruner=pruner, study_name=study_name, storage=storage, load_if_exists=True)
+    study = optuna.create_study(direction="maximize", sampler=sampler, pruner=pruner, study_name=study_name, load_if_exists=True)
 
     def _objective(trial):
         return objective(trial, algo=algo, trial_timesteps=trial_timesteps, seed=seed)
