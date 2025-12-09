@@ -4,6 +4,7 @@ import argparse
 from typing import Dict, Any
 import numpy as np
 import optuna
+import json
 
 import torch
 from stable_baselines3 import DQN, A2C, PPO
@@ -350,10 +351,10 @@ if __name__ == "__main__":
     os.makedirs("models", exist_ok=True)
 
     if args.skip_hparam:
-        import json
         with open(f"hp_results/best_params_{args.algo}.json", "r") as f:
             data = json.load(f)
         best_params = data["params"]
+        
     else:
         best_params, study = run_study(
             algo=args.algo,
