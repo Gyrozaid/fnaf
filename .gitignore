@@ -4,3 +4,6 @@ __pycache__/
 tensorboard_logs/DQN_1/events.out.tfevents.1765151837.vl965-172-31-120-203.wireless.umass.edu.6802.0
 __pycache__/mdp_def.cpython-314.pyc
 models/
+logs/a2c_training.csv.monitor.csv
+logs/dqn_training.csv.monitor.csv
+logs/ppo_training.csv.monitor.csv

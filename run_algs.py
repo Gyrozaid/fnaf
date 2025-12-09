@@ -1,14 +1,15 @@
 import numpy as np
-import torch
 from stable_baselines3 import DQN, A2C, PPO
 from stable_baselines3.common.monitor import Monitor
 import matplotlib.pyplot as plt
 
 from mdp_def import FNAFEnv, TEST_SEEDS
+
+# Automatically selects the best device for training
 DEVICE = "auto"
 
-def train_dqn(env, total_timesteps=500000):
-    """Train DQN agent with Stable-Baselines3."""
+def train_dqn(env, total_timesteps):
+    """Training DQN agent."""
     print("")
     print("Training DQN")
     print("")
@@ -16,17 +17,6 @@ def train_dqn(env, total_timesteps=500000):
     model = DQN(
         "MlpPolicy",
         env,
-        learning_rate=1e-3,
-        buffer_size=50000,
-        learning_starts=1000,
-        batch_size=256,
-        tau=1.0,  # Hard update every target_update_interval steps
-        gamma=0.995,
-        target_update_interval=500,
-        exploration_fraction=0.3,
-        exploration_initial_eps=1.0,
-        exploration_final_eps=0.05,
-        policy_kwargs=dict(net_arch=[256, 256, 256, 256]),
         verbose=1,
         tensorboard_log="./tensorboard_logs/",
         device=DEVICE
@@ -36,64 +26,47 @@ def train_dqn(env, total_timesteps=500000):
     model.learn(total_timesteps=total_timesteps, progress_bar=True)
     
     # Save
-    model.save("models/fnaf_dqn_sb3")
-    print("\nModel saved to models/fnaf_dqn_sb3.zip")
+    model.save("models/fnaf_dqn")
+    print()
+    print("Model saved to models/fnaf_dqn.zip")
     
     return model
 
 
-def train_a2c(env, total_timesteps=500000):
-    """Train A2C agent with Stable-Baselines3."""
-    print("\n" + "="*60)
+def train_a2c(env, total_timesteps):
+    """Training A2C agent."""
+    print("")
     print("Training A2C")
-    print("="*60)
+    print("")
 
     model = A2C(
         "MlpPolicy",
         env,
-        learning_rate=3e-4,
-        n_steps=5,  # Number of steps to collect before update
-        gamma=0.99,
-        gae_lambda=1.0,  # GAE parameter (1.0 = Monte Carlo)
-        ent_coef=0.01,  # Entropy coefficient
-        vf_coef=0.5,  # Value function coefficient
-        max_grad_norm=0.5,
-        policy_kwargs=dict(net_arch=[256, 256]),
         verbose=1,
         tensorboard_log="./tensorboard_logs/",
-        device=DEVICE  # Use GPU if available
+        device=DEVICE 
     )
     
     # Train
     model.learn(total_timesteps=total_timesteps, progress_bar=True)
     
     # Save
-    model.save("models/fnaf_a2c_sb3")
-    print("\nModel saved to models/fnaf_a2c_sb3.zip")
+    model.save("models/fnaf_a2c")
+    print()
+    print("Model saved to models/fnaf_a2c.zip")
     
     return model
 
 
-def train_ppo(env, total_timesteps=500000):
-    """Train PPO agent with Stable-Baselines3."""
-    print("\n" + "="*60)
+def train_ppo(env, total_timesteps):
+    """Training PPO agent."""
+    print()
     print("Training PPO")
-    print("="*60)
+    print()
     
     model = PPO(
         "MlpPolicy",
         env,
-        learning_rate=3e-4,
-        n_steps=2048,
-        batch_size=64,
-        n_epochs=10,
-        gamma=0.99,
-        gae_lambda=0.95,
-        clip_range=0.2,
-        ent_coef=0.01,
-        vf_coef=0.5,
-        max_grad_norm=0.5,
-        policy_kwargs=dict(net_arch=[256, 256]),
         verbose=1,
         tensorboard_log="./tensorboard_logs/",
         device=DEVICE
@@ -103,23 +76,25 @@ def train_ppo(env, total_timesteps=500000):
     model.learn(total_timesteps=total_timesteps, progress_bar=True)
     
     # Save
-    model.save("models/fnaf_ppo_sb3")
-    print("\nModel saved to models/fnaf_ppo_sb3.zip")
+    model.save("models/fnaf_ppo")
+    print()
+    print("Model saved to models/fnaf_ppo.zip")
     
     return model
 
 
-def evaluate_on_test_seeds(model, model_name):
-    """Evaluate model on fixed test seeds."""
-    print(f"\n{'='*60}")
-    print(f"Evaluating: {model_name}")
-    print(f"{'='*60}")
+def evaluate_on_test_seeds(model, model_name, render_mode=None):
+    """Evaluate model on fixed test seeds to ensure consistency."""
+    print()
+    print("Evaluating: ", model_name)
+    print()
     
     episode_rewards = []
     episode_lengths = []
     
     for i, seed in enumerate(TEST_SEEDS):
-        env = FNAFEnv(render_mode="human")
+        # Initialize enviornment
+        env = FNAFEnv(render_mode=render_mode)
         obs, _ = env.reset(seed=seed)
         
         episode_reward = 0
@@ -127,19 +102,20 @@ def evaluate_on_test_seeds(model, model_name):
         terminated = False
         truncated = False
         
+        # Run episode
         while not (terminated or truncated):
             action, _ = model.predict(obs, deterministic=True)
             obs, reward, terminated, truncated, info = env.step(action)
             episode_reward += reward
             episode_length += 1
         
+        # Collect rewards and length
         episode_rewards.append(episode_reward)
         episode_lengths.append(episode_length)
         
         print(f"  Episode {i + 1} (seed={seed}): Reward = {episode_reward:.2f}, Length = {episode_length}")
-        
-        env.close()
     
+    # Compute averages and print mean performance stats for the model
     avg_reward = np.mean(episode_rewards)
     std_reward = np.std(episode_rewards)
     avg_length = np.mean(episode_lengths)
@@ -165,10 +141,13 @@ def compare_all_methods():
     results = []
     
     # 1. Heuristic
-    print("\n" + "="*60)
+    # Heuristic, as defined in simple_heuristic.py, serves as a baseline 
+    # for a general strategy which we believe will provide very good performance.
+    print()
     print("Evaluating: Heuristic")
-    print("="*60)
+    print()
     
+    # For heuristic, collect same mean performance metrics that we calculate for all other agents.
     heuristic_rewards = []
     heuristic_lengths = []
     
@@ -191,96 +170,78 @@ def compare_all_methods():
     
     # 2. Load and evaluate trained models
     
-    try:
-        dqn_model = DQN.load("models/fnaf_dqn_sb3")
-        results.append(evaluate_on_test_seeds(dqn_model, "DQN (SB3)"))
-    except FileNotFoundError:
-        print("\nDQN model not found. Skipping.")
+    # Change RENDER_MODE to "human" to view step by step what each agent is doing during evaluation
+    # i.e. opening doors, using camera, etc.
+    # Also what is happening in the enviornment i.e. where each animatronic is, and if they are being focused by the camera or not, etc.
+    RENDER_MODE = None
+    dqn_model = DQN.load("models/fnaf_dqn")
+    results.append(evaluate_on_test_seeds(dqn_model, "DQN", RENDER_MODE))
+
+    a2c_model = A2C.load("models/fnaf_a2c")
+    results.append(evaluate_on_test_seeds(a2c_model, "A2C", RENDER_MODE))
     
-    try:
-        a2c_model = A2C.load("models/fnaf_a2c_sb3")
-        results.append(evaluate_on_test_seeds(a2c_model, "A2C (SB3)"))
-    except FileNotFoundError:
-        print("\nA2C model not found. Skipping.")
-    
-    try:
-        ppo_model = PPO.load("models/fnaf_ppo_sb3")
-        results.append(evaluate_on_test_seeds(ppo_model, "PPO (SB3)"))
-    except FileNotFoundError:
-        print("\nPPO model not found. Skipping.")
+    ppo_model = PPO.load("models/fnaf_ppo")
+    results.append(evaluate_on_test_seeds(ppo_model, "PPO", RENDER_MODE))
     
     # Print comparison
-    if len(results) > 1:
-        print("\n" + "="*60)
-        print("COMPARISON SUMMARY")
-        print("="*60)
-        
-        results.sort(key=lambda x: x['avg_reward'], reverse=True)
-        
-        print(f"\n{'Method':<20} {'Avg Reward':<15}")
-        print("-" * 35)
-        for result in results:
-            print(f"{result['name']:<20} {result['avg_reward']:>6.2f} ± {result['std_reward']:<5.2f}")
-        
-        # Plot comparison
-        plot_comparison(results)
+    print()
+    print("COMPARISON SUMMARY")
+    print()
+    
+    # Sort the results based on average reward, in descending order 
+    results.sort(key=lambda x: x['avg_reward'], reverse=True)
+    
+    print(f"\n{'Method':<20} {'Average Reward':<15}")
+    print("-" * 35)
+    for result in results:
+        print(f"{result['name']:<20} {result['avg_reward']:>6.2f} ± {result['std_reward']:<5.2f}")
+    
+    # Plot comparison boxplot
+    plot_comparison(results)
 
 
 def plot_comparison(results):
-    """Create comparison visualization."""
-    plt.figure()
-    fig, ax = plt.subplots(figsize=(10, 6))
-    
+    """Create boxplot for the runs of each agent + heuristic on the evaluation test seeds set."""
     names = [r['name'] for r in results]
     rewards = [r['rewards'] for r in results]
-    
-    bp = ax.boxplot(rewards, tick_labels=names, patch_artist=True)
-    
-    colors = ['lightblue', 'lightgreen', 'lightcoral', 'lightyellow']
-    for patch, color in zip(bp['boxes'], colors[:len(results)]):
-        patch.set_facecolor(color)
-    
-    ax.set_ylabel('Episode Reward', fontsize=12)
-    ax.set_title('Performance Comparison Across Test Seeds', fontsize=14, fontweight='bold')
-    ax.grid(axis='y', alpha=0.3)
-    
-    plt.tight_layout()
-    pathname = "figs/sb3_comparison.png"
-    plt.savefig(pathname, dpi=150, bbox_inches='tight')
-    print("\nComparison plot saved to, ", pathname)
+
+    plt.figure()
+    bp = plt.boxplot(rewards, labels=names, patch_artist=True)
+
+    for box, color in zip(bp['boxes'], ['lightblue', 'lightgreen', 'lightcoral', 'lightyellow']):
+        box.set_facecolor(color)
+
+    plt.title("Performance Comparison Across Test Seeds")
+    plt.ylabel("Episode Reward")
+    plt.grid(axis='y', alpha=0.3)
+    plt.savefig("figs/sb3_comparison.png")
+
 
 
 if __name__ == "__main__":
-    import argparse
+    TRAINING_TIMESTEPS = 500000
     
-    parser = argparse.ArgumentParser()
-    parser.add_argument('--train', action='store_true', help='Train models')
-    parser.add_argument('--eval', action='store_true', help='Evaluate models')
-    parser.add_argument('--algo', type=str, default='all', choices=['dqn', 'a2c', 'ppo', 'all'], help='Which algorithm to train')
-    parser.add_argument('--timesteps', type=int, default=500000, help='Total training timesteps')
-    args = parser.parse_args()
-    
-    # Create environment
-    env = Monitor(FNAFEnv())
-    
-    if args.train:
-        if args.algo in ['dqn', 'all']:
-            train_dqn(env, args.timesteps)
-        
-        if args.algo in ['a2c', 'all']:
-            train_a2c(env, args.timesteps)
-        
-        if args.algo in ['ppo', 'all']:
-            train_ppo(env, args.timesteps)
-    
-    if args.eval:
-        compare_all_methods()
-    
-    if not args.train and not args.eval:
-        print("Usage:")
-        print("  Train: python run_algs.py --train [--algo dqn/a2c/ppo/all] [--timesteps 500000]")
-        print("  Eval:  python run_algs.py --eval")
-        print("  Both:  python run_algs.py --train --eval")
+    # Create environments for each env, so they save their logs to different files.
+    # Logs override old CSV logs even if the training isnt completed.
+    dqn_env = Monitor(FNAFEnv(), filename="logs/dqn_training.csv")
+    a2c_env = Monitor(FNAFEnv(), filename="logs/a2c_training.csv")
+    ppo_env = Monitor(FNAFEnv(), filename="logs/ppo_training.csv")
 
-        # RUN in new terminal to view live training:
-        # tensorboard --logdir ./tensorboard_logs/
+    # TRAINING
+    # Comment out any model you don't wish to train, training will only overwrite the currently saved model AFTER completion.
+
+    train_dqn(dqn_env, TRAINING_TIMESTEPS)
+    train_a2c(a2c_env, TRAINING_TIMESTEPS)
+    train_ppo(ppo_env, TRAINING_TIMESTEPS)
+    
+    # EVALUATION
+    # Runs all of the trained agents on a small list of random seeds to ensure consistency.
+    # The average return and episode length is returned for each algorithm.
+    
+    compare_all_methods()
+    
+    # VIEW METRICS
+    # View all runs of the model, stored within the tensorboard_logs directory
+    # run in new terminal to view live training / training figs:
+
+    # tensorboard --logdir ./tensorboard_logs/
