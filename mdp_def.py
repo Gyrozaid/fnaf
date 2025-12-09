@@ -171,9 +171,7 @@ class FNAFEnv(gym.Env):
                 anim_state.focused = False
         elif self.battery > 0:
             if action == self.CHECK_CAMERA_CHICA:
-                # Causes Chica to move back a space.
-                curr_location_idx = self.anims["Chica"].location
-                self.anims["Chica"].location = max(0, curr_location_idx - 1)
+                # Causes Chica to freeze in place.
                 self.anims["Chica"].focused = True
                 using_camera = True
 
