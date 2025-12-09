@@ -18,7 +18,7 @@ def run_heuristic(seed: int):
             for name, anim in env.anims.items()
         )
         left_threat = any(
-            anim.location >= attack_idx - 1 and name == "Bonnie"
+            anim.location >= attack_idx - 1 and name == "Freddy"
             for name, anim in env.anims.items()
         )
         
@@ -31,7 +31,7 @@ def run_heuristic(seed: int):
             action = FNAFEnv.TOGGLE_LEFT_DOOR
         elif not left_threat and env.left_door_closed:
             action = FNAFEnv.TOGGLE_LEFT_DOOR
-        # ALWAYS focus freddy, since once he hits the door, he doensn't go back to the stage he just goes back one step.
+        # ALWAYS focus freddy, since once he hits the door, he doensn't go back to the stage he just goes back one step to office entry.
         elif not env.anims["Freddy"].focused:
             action = FNAFEnv.CHECK_CAMERA_FREDDY
         else:

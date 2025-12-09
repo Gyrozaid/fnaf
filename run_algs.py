@@ -206,7 +206,7 @@ def plot_comparison(results):
     rewards = [r['rewards'] for r in results]
 
     plt.figure()
-    bp = plt.boxplot(rewards, labels=names, patch_artist=True)
+    bp = plt.boxplot(rewards, tick_labels=names, patch_artist=True)
 
     for box, color in zip(bp['boxes'], ['lightblue', 'lightgreen', 'lightcoral', 'lightyellow']):
         box.set_facecolor(color)

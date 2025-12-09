@@ -136,9 +136,9 @@ class FNAFEnv(gym.Env):
                     # Chica goes all the way back to the start (stage)
                     if anim_name == "Chica":
                         anim_state.location = 0
-                    # Freddy goes just one space back
+                    # Freddy goes just one space back from attack -> office entry
                     else:
-                        anim_state.location = min(anim_state.location - 1, 0)
+                        anim_state.location = max(anim_state.location - 1, 0)
 
                     return False, None
         
