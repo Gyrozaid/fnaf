@@ -16,6 +16,14 @@ def train_dqn(env, total_timesteps):
     
     model = DQN(
         "MlpPolicy",
+        learning_rate = 0.00020311910371188509,
+        gamma = 0.9608865177479774,
+        net_arch = [256, 256],
+        batch_size = 32,
+        buffer_size = 100000,
+        target_update_interval = 258,
+        exploration_fraction = 0.2680255936799418,
+        exploration_final_eps = 0.12320837707847854
         env,
         verbose=1,
         tensorboard_log="./tensorboard_logs/",
@@ -42,6 +50,13 @@ def train_a2c(env, total_timesteps):
     model = A2C(
         "MlpPolicy",
         env,
+        learning_rate = 0.0003898034895288209,
+        gamma = 0.9544658648241585,
+        net_arch = [128, 128],
+        n_steps = 50,
+        ent_coef = 0.00014417404067605557,
+        vf_coef = 0.7164978529477865,
+        max_grad_norm = 0.5874150956628301,
         verbose=1,
         tensorboard_log="./tensorboard_logs/",
         device=DEVICE 
@@ -66,6 +81,14 @@ def train_ppo(env, total_timesteps):
     
     model = PPO(
         "MlpPolicy",
+        learning_rate = 0.0038842777547031426,
+        gamma = 0.9811025765286951,
+        net_arch = [128, 128],
+        n_steps = 2048,
+        batch_size = 256,
+        n_epochs = 13,
+        clip_range = 0.25419343599091215,
+        ent_coef = 0.0009444574254983562
         env,
         verbose=1,
         tensorboard_log="./tensorboard_logs/",

@@ -1,0 +1,13 @@
+{
+  "value": 52.2,
+  "params": {
+    "learning_rate": 0.00020311910371188509,
+    "gamma": 0.9608865177479774,
+    "net_arch": [256, 256],
+    "batch_size": 32,
+    "buffer_size": 100000,
+    "target_update_interval": 258,
+    "exploration_fraction": 0.2680255936799418,
+    "exploration_final_eps": 0.12320837707847854
+  }
+}
