@@ -31,9 +31,9 @@ def run_heuristic(seed: int):
             action = FNAFEnv.TOGGLE_LEFT_DOOR
         elif not left_threat and env.left_door_closed:
             action = FNAFEnv.TOGGLE_LEFT_DOOR
-        elif env.np_random.random() < 0.9:
-            # Randomly check on Chica 90% of the time
-            action = FNAFEnv.CHECK_CAMERA_CHICA
+        # ALWAYS focus freddy, since once he hits the door, he doensn't go back to the stage he just goes back one step.
+        elif not env.anims["Freddy"].focused:
+            action = FNAFEnv.CHECK_CAMERA_FREDDY
         else:
             action = FNAFEnv.NOOP
         

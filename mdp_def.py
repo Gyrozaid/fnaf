@@ -28,7 +28,8 @@ class FNAFEnv(gym.Env):
     TOGGLE_RIGHT_DOOR = 1
     CHECK_CAMERA_CHICA = 2
     CHECK_CAMERA_FREDDY = 3
-    NOOP = 4
+    CAMERA_OFF = 4
+    NOOP = 5
     
     def __init__(self, max_timesteps = DEFAULT_N_TIMESTEPS, render_mode = None):
         super().__init__()
@@ -49,8 +50,8 @@ class FNAFEnv(gym.Env):
         # Mapping which animatronic attacks which door
         self.attack_door_map = {"Freddy": "left", "Chica": "right"}
         
-        # Simplified action space: NOOP + Toggling each door + Focusing camera on each animatronic
-        self.action_space = spaces.Discrete(3 + len(ANIMATRONICS))
+        # Simplified action space: NOOP + Toggling each door + Focusing camera on each animatronic + Remove camera/turn off camera from all
+        self.action_space = spaces.Discrete(3 + len(ANIMATRONICS) + 1)
         
         # Define observation space
         obs_dim = (
@@ -165,6 +166,9 @@ class FNAFEnv(gym.Env):
             self.right_door_closed = not self.right_door_closed
             using_right = self.right_door_closed
         # Camera usage
+        elif action == self.CAMERA_OFF:
+            for anim_name, anim_state in self.anims.items():
+                anim_state.focused = False
         elif self.battery > 0:
             if action == self.CHECK_CAMERA_CHICA:
                 # Causes Chica to move back a space.
@@ -172,10 +176,20 @@ class FNAFEnv(gym.Env):
                 self.anims["Chica"].location = max(0, curr_location_idx - 1)
                 self.anims["Chica"].focused = True
                 using_camera = True
+
+                # Unfocus all other animatronics
+                for anim_name, anim_state in self.anims.items():
+                    if anim_name != "Chica":
+                        anim_state.focused = False
             if action == self.CHECK_CAMERA_FREDDY:
                 # Causes Freddy to freeze in place.
                 self.anims["Freddy"].focused = True
                 using_camera = True
+
+                # Unfocus all other animatronics
+                for anim_name, anim_state in self.anims.items():
+                    if anim_name != "Freddy":
+                        anim_state.focused = False
         elif action == self.NOOP:
             pass
         
@@ -276,5 +290,5 @@ class FNAFEnv(gym.Env):
         for name, anim in self.anims.items():
             lines.append(f"  {name}: {ROOM_NAMES[anim.location]}")
             camera_status = "YES" if anim.focused else "NO"
-            lines.append(f"  {"Camera focused?"}: {camera_status}")
+            lines.append(f"  {"Camera focused?"} {camera_status}\n")
         return "\n".join(lines) + "\n"

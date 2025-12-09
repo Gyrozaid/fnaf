@@ -109,7 +109,7 @@ def train_ppo(env, total_timesteps=500000):
     return model
 
 
-def evaluate_on_test_seeds(model, env_class, model_name):
+def evaluate_on_test_seeds(model, model_name):
     """Evaluate model on fixed test seeds."""
     print(f"\n{'='*60}")
     print(f"Evaluating: {model_name}")
@@ -119,7 +119,7 @@ def evaluate_on_test_seeds(model, env_class, model_name):
     episode_lengths = []
     
     for i, seed in enumerate(TEST_SEEDS):
-        env = env_class()
+        env = FNAFEnv(render_mode="human")
         obs, _ = env.reset(seed=seed)
         
         episode_reward = 0
@@ -190,23 +190,22 @@ def compare_all_methods():
     print(f"  Average Length: {np.mean(heuristic_lengths):.2f} ± {np.std(heuristic_lengths):.2f}")
     
     # 2. Load and evaluate trained models
-    env_class = FNAFEnv
     
     try:
         dqn_model = DQN.load("models/fnaf_dqn_sb3")
-        results.append(evaluate_on_test_seeds(dqn_model, env_class, "DQN (SB3)"))
+        results.append(evaluate_on_test_seeds(dqn_model, "DQN (SB3)"))
     except FileNotFoundError:
         print("\nDQN model not found. Skipping.")
     
     try:
         a2c_model = A2C.load("models/fnaf_a2c_sb3")
-        results.append(evaluate_on_test_seeds(a2c_model, env_class, "A2C (SB3)"))
+        results.append(evaluate_on_test_seeds(a2c_model, "A2C (SB3)"))
     except FileNotFoundError:
         print("\nA2C model not found. Skipping.")
     
     try:
         ppo_model = PPO.load("models/fnaf_ppo_sb3")
-        results.append(evaluate_on_test_seeds(ppo_model, env_class, "PPO (SB3)"))
+        results.append(evaluate_on_test_seeds(ppo_model, "PPO (SB3)"))
     except FileNotFoundError:
         print("\nPPO model not found. Skipping.")
     
@@ -257,11 +256,8 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser()
     parser.add_argument('--train', action='store_true', help='Train models')
     parser.add_argument('--eval', action='store_true', help='Evaluate models')
-    parser.add_argument('--algo', type=str, default='all', 
-                       choices=['dqn', 'a2c', 'ppo', 'all'],
-                       help='Which algorithm to train')
-    parser.add_argument('--timesteps', type=int, default=500000,
-                       help='Total training timesteps')
+    parser.add_argument('--algo', type=str, default='all', choices=['dqn', 'a2c', 'ppo', 'all'], help='Which algorithm to train')
+    parser.add_argument('--timesteps', type=int, default=500000, help='Total training timesteps')
     args = parser.parse_args()
     
     # Create environment
