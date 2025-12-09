@@ -1,0 +1,13 @@
+{
+  "value": 53.0,
+  "params": {
+    "learning_rate": 3.5410264601399624e-05,
+    "gamma": 0.9523957206219084,
+    "net_arch": "large",
+    "n_steps": 256,
+    "batch_size": 256,
+    "n_epochs": 14,
+    "clip_range": 0.17703303771015788,
+    "ent_coef": 0.009928199593328376
+  }
+}
