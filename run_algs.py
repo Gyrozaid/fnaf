@@ -338,10 +338,10 @@ if __name__ == "__main__":
     # train_default() runs training on all 3 models with the default algorithm hyperparameters.
 
     train_dqn_tuned(dqn_env, TRAINING_TIMESTEPS)
-    # train_a2c_tuned(a2c_env, TRAINING_TIMESTEPS)
-    # train_ppo_tuned(ppo_env, TRAINING_TIMESTEPS)
+    train_a2c_tuned(a2c_env, TRAINING_TIMESTEPS)
+    train_ppo_tuned(ppo_env, TRAINING_TIMESTEPS)
 
-    # train_default(TRAINING_TIMESTEPS)
+    train_default(TRAINING_TIMESTEPS)
     
     # EVALUATION
     # REQUIRES all models to be trained to run (dqn, a2c and ppo models for both default and tuned models)
