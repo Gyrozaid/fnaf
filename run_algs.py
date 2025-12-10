@@ -8,12 +8,14 @@ from mdp_def import FNAFEnv, TEST_SEEDS
 # Automatically selects the best device for training
 DEVICE = "auto"
 
-def train_dqn(env, total_timesteps):
-    """Training DQN agent."""
+def train_dqn_tuned(env, total_timesteps):
+    '''Training DQN agent with tuned hyperparameters'''
+
     print("")
-    print("Training DQN")
+    print("Training DQN with tuned hyperparameters")
     print("")
     
+    # Hyperparameters sourced from hp_results
     model = DQN(
         "MlpPolicy",
         learning_rate = 0.00020311910371188509,
@@ -41,10 +43,11 @@ def train_dqn(env, total_timesteps):
     return model
 
 
-def train_a2c(env, total_timesteps):
-    """Training A2C agent."""
+def train_a2c_tuned(env, total_timesteps):
+    '''Training A2C with tuned hyperparameters'''
+
     print("")
-    print("Training A2C")
+    print("Training A2C with tuned hyperparameters")
     print("")
 
     model = A2C(
@@ -73,10 +76,10 @@ def train_a2c(env, total_timesteps):
     return model
 
 
-def train_ppo(env, total_timesteps):
-    """Training PPO agent."""
+def train_ppo_tuned(env, total_timesteps):
+    """Training PPO with tuned hyperparameters"""
     print()
-    print("Training PPO")
+    print("Training PPO with tuned hyperparameters")
     print()
     
     model = PPO(
@@ -122,21 +125,24 @@ def evaluate_on_test_seeds(model, model_name, render_mode=None):
         
         episode_reward = 0
         episode_length = 0
-        terminated = False
-        truncated = False
+        episode_terminated = False
+        episode_truncated = False
         
         # Run episode
-        while not (terminated or truncated):
+        while not (episode_terminated or episode_truncated):
             action, _ = model.predict(obs, deterministic=True)
             obs, reward, terminated, truncated, info = env.step(action)
             episode_reward += reward
             episode_length += 1
+
+            episode_terminated = terminated
+            episode_truncated = truncated
         
         # Collect rewards and length
         episode_rewards.append(episode_reward)
         episode_lengths.append(episode_length)
         
-        print(f"  Episode {i + 1} (seed={seed}): Reward = {episode_reward:.2f}, Length = {episode_length}")
+        print(f"Episode {i + 1} (seed={seed}): Reward = {episode_reward:.2f}, Length = {episode_length}")
     
     # Compute averages and print mean performance stats for the model
     avg_reward = np.mean(episode_rewards)
@@ -144,9 +150,10 @@ def evaluate_on_test_seeds(model, model_name, render_mode=None):
     avg_length = np.mean(episode_lengths)
     std_length = np.std(episode_lengths)
     
-    print(f"\n{model_name} Results:")
-    print(f"  Average Reward: {avg_reward:.2f} ± {std_reward:.2f}")
-    print(f"  Average Length: {avg_length:.2f} ± {std_length:.2f}")
+    print()
+    print(f"{model_name} Results:")
+    print(f"Average Reward: {avg_reward:.2f} +/- {std_reward:.2f}")
+    print(f"Average Length: {avg_length:.2f} +/- {std_length:.2f}")
     
     return {
         'name': model_name,
@@ -158,7 +165,7 @@ def evaluate_on_test_seeds(model, model_name, render_mode=None):
 
 
 def compare_all_methods():
-    """Compare all methods including heuristic."""
+    """Compare all methods (all 3 agents for both hyperparamter-tuned and default parameter verions) including heuristic."""
     from simple_heuristic import run_heuristic
     
     results = []
@@ -178,18 +185,20 @@ def compare_all_methods():
         reward, length = run_heuristic(seed)
         heuristic_rewards.append(reward)
         heuristic_lengths.append(length)
-        # print(f"  Episode {i + 1} (seed={seed}): Reward = {reward:.2f}, Length = {length}")
+        # print(f"Episode {i + 1} (seed={seed}): Reward = {reward:.2f}, Length = {length}")
     
     results.append({
         'name': 'Heuristic',
         'rewards': heuristic_rewards,
+        'lengths': heuristic_lengths,
         'avg_reward': np.mean(heuristic_rewards),
         'std_reward': np.std(heuristic_rewards)
     })
     
-    print(f"\nHeuristic Results:")
-    print(f"  Average Reward: {np.mean(heuristic_rewards):.2f} ± {np.std(heuristic_rewards):.2f}")
-    print(f"  Average Length: {np.mean(heuristic_lengths):.2f} ± {np.std(heuristic_lengths):.2f}")
+    print()
+    print("Heuristic Results:")
+    print(f"Average Reward: {np.mean(heuristic_rewards):.2f} +/- {np.std(heuristic_rewards):.2f}")
+    print(f"Average Length: {np.mean(heuristic_lengths):.2f} +/- {np.std(heuristic_lengths):.2f}")
     
     # 2. Load and evaluate trained models
     
@@ -222,11 +231,13 @@ def compare_all_methods():
     # Sort the results based on average reward, in descending order 
     results.sort(key=lambda x: x['avg_reward'], reverse=True)
     
-    print(f"\n{'Method':<20} {'Average Reward':<15}")
-    print("-" * 35)
+    print()
+    print("Method | Average Reward")
+    print()
     for result in results:
-        print(f"{result['name']:<20} {result['avg_reward']:>6.2f} ± {result['std_reward']:<5.2f}")
-    
+        print(f"{result['name']} {result['avg_reward']:.2f} +/- {result['std_reward']:.2f}")
+    print()
+
     # Plot comparison boxplot
     plot_comparison(results)
 
@@ -255,7 +266,6 @@ def train_default(total_timesteps):
     print("")
 
     default_dqn_env = Monitor(FNAFEnv(), filename="logs/default_dqn_training.csv")
-    
     model = DQN(
         "MlpPolicy",
         env=default_dqn_env,
@@ -277,7 +287,6 @@ def train_default(total_timesteps):
     print("")
 
     default_a2c_env = Monitor(FNAFEnv(), filename="logs/default_a2c_training.csv")
-
     model = A2C(
         "MlpPolicy",
         env=default_a2c_env,
@@ -299,7 +308,6 @@ def train_default(total_timesteps):
     print()
 
     default_ppo_env = Monitor(FNAFEnv(), filename="logs/default_ppo_training.csv")
-    
     model = PPO(
         "MlpPolicy",
         env=default_ppo_env,
@@ -326,12 +334,14 @@ if __name__ == "__main__":
 
     # TRAINING
     # Comment out any model you don't wish to train, training will only overwrite the currently saved model AFTER completion.
+    # _tuned methods train models with the best hyperparameters we found.
+    # train_default() runs training on all 3 models with the default algorithm hyperparameters.
 
-    train_dqn(dqn_env, TRAINING_TIMESTEPS)
-    train_a2c(a2c_env, TRAINING_TIMESTEPS)
-    train_ppo(ppo_env, TRAINING_TIMESTEPS)
+    train_dqn_tuned(dqn_env, TRAINING_TIMESTEPS)
+    # train_a2c_tuned(a2c_env, TRAINING_TIMESTEPS)
+    # train_ppo_tuned(ppo_env, TRAINING_TIMESTEPS)
 
-    train_default(TRAINING_TIMESTEPS)
+    # train_default(TRAINING_TIMESTEPS)
     
     # EVALUATION
     # REQUIRES all models to be trained to run (dqn, a2c and ppo models for both default and tuned models)

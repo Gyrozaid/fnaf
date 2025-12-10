@@ -1,8 +1,9 @@
-from mdp_def import N_ROOMS, ROOM_NAMES, TEST_SEEDS, FNAFEnv
+from mdp_def import ROOM_NAMES, TEST_SEEDS, FNAFEnv
 import numpy as np
 
 def run_heuristic(seed: int):
-    env = FNAFEnv(render_mode="human")
+    # Change render_mode to "human" to see timestep details
+    env = FNAFEnv(render_mode=None)
     obs, info = env.reset(seed=seed)
     
     total_reward = 0
@@ -10,9 +11,9 @@ def run_heuristic(seed: int):
     truncated = False
     
     while not (terminated or truncated):
-        # Simple heuristic policy
         attack_idx = ROOM_NAMES.index("ATTACK")
         
+        # Check if any animatronics are at the space before ATTACK
         right_threat = any(
             anim.location >= attack_idx - 1 and name == "Chica"
             for name, anim in env.anims.items()
@@ -22,7 +23,9 @@ def run_heuristic(seed: int):
             for name, anim in env.anims.items()
         )
         
-        # Action is now a scalar integer, not an array
+        # Action selection:
+
+        # Close door if threat is nearby, open it if they leave
         if right_threat and not env.right_door_closed:
             action = FNAFEnv.TOGGLE_RIGHT_DOOR
         elif not right_threat and env.right_door_closed:
@@ -39,19 +42,14 @@ def run_heuristic(seed: int):
         
         obs, reward, terminated, truncated, info = env.step(action)
         total_reward += reward
-        
-        if terminated or truncated:
-            # print(f"\nEpisode ended at t={env.timestep}")
-            # print(f"Info: {info}")
-            break
     
     # print(f"\nTotal reward: {total_reward}")
     env.close()
 
     return total_reward, env.timestep
-# Example usage
+
 if __name__ == "__main__":
-    """Evaluate the heuristic"""
+    # Heuristic Evaluation
     episode_rewards = []
     episode_lengths = []
     
@@ -62,4 +60,6 @@ if __name__ == "__main__":
         
         print(f"Eval Episode {i + 1}: Reward = {episode_reward:.2f}, Length = {episode_length:.2f}")
     
-    print(f"\nAverage Reward: {np.mean(episode_rewards):.2f} \nAverage Length: {np.mean(episode_lengths):.2f}")
+    print()
+    print(f"Average Reward: {np.mean(episode_rewards):.2f}") 
+    print(f"Average Length: {np.mean(episode_lengths):.2f}")

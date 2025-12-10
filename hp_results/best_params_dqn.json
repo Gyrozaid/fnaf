@@ -1,13 +1,13 @@
 {
-  "value": 52.2,
+  "value": 48.0,
   "params": {
-    "learning_rate": 0.00020311910371188509,
-    "gamma": 0.9608865177479774,
-    "net_arch": [256, 256],
-    "batch_size": 32,
+    "learning_rate": 2.284455685002053e-05,
+    "gamma": 0.9855909148824274,
+    "net_arch": "large",
+    "batch_size": 64,
     "buffer_size": 100000,
-    "target_update_interval": 258,
-    "exploration_fraction": 0.2680255936799418,
-    "exploration_final_eps": 0.12320837707847854
+    "target_update_interval": 697,
+    "exploration_fraction": 0.3034282764658811,
+    "exploration_final_eps": 0.18243763004595767
   }
 }

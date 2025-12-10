@@ -50,7 +50,7 @@ class FNAFEnv(gym.Env):
         # Mapping which animatronic attacks which door
         self.attack_door_map = {"Freddy": "left", "Chica": "right"}
         
-        # Simplified action space: NOOP + Toggling each door + Focusing camera on each animatronic + Remove camera/turn off camera from all
+        # Action space: NOOP + Toggling each door + Focusing camera on each animatronic + Remove camera/turn off camera from all
         self.action_space = spaces.Discrete(3 + len(ANIMATRONICS) + 1)
         
         # Define observation space
@@ -59,20 +59,18 @@ class FNAFEnv(gym.Env):
             2 +  # door states
             len(ANIMATRONICS) * 3  # per anim: location, in_office, focused
         )
-        self.observation_space = spaces.Box(
-            low=0.0, high=1.0, shape=(obs_dim,), dtype=np.float32
-        )
+        self.observation_space = spaces.Box(0, 1, shape=(obs_dim,))
         
         # Initialize state variables
-        self.timestep = 0
-        self.battery = DEFAULT_BATTERY
-        self.left_door_closed = False
-        self.right_door_closed = False
-        self.anims: Dict[str, AnimState] = {}
+        self.timestep = None
+        self.battery = None
+        self.left_door_closed = None
+        self.right_door_closed = None
+        self.anims = None
         self.np_random = None
     
     def reset(self, seed = None):
-        """Reset the environment to initial state."""
+        '''Reset the environment to initial state'''
         super().reset(seed=seed)
         
         # Reset state
@@ -91,13 +89,8 @@ class FNAFEnv(gym.Env):
         
         return obs, info
     
-    def _battery_cost_for_action(self, will_use_left: bool, will_use_right: bool, will_use_camera: bool):
-        """Calculate battery cost based on resource usage."""
-        count = int(will_use_left) + int(will_use_right) + int(will_use_camera)
-        return self.battery_consumption_map[count]
-    
     def _attempt_anim_move(self, anim: AnimState):
-        """Attempt to move an animatronic."""
+        '''Attempt to move an animatronic'''
         # If the animatronic is focused by the camera, no movement will occur.
         if anim.focused:
             return
@@ -113,7 +106,7 @@ class FNAFEnv(gym.Env):
                 anim.location += 1
     
     def _check_death(self):
-        """Check if any animatronic attacks the player."""
+        '''Check if any animatronic attacks the player'''
         attack_idx = ROOM_NAMES.index("ATTACK")
         
         for anim_name, anim_state in self.anims.items():
@@ -144,8 +137,8 @@ class FNAFEnv(gym.Env):
         
         return False, None
     
-    def step(self, action: int) -> Tuple[np.ndarray, float, bool, bool, Dict]:
-        """Execute one timestep within the environment."""
+    def step(self, action: int):
+        '''Execute one timestep within the environment'''
 
         # Determine resource usage this timestep
         using_left = self.left_door_closed
@@ -200,7 +193,8 @@ class FNAFEnv(gym.Env):
             using_left = using_right = using_camera = False
         
         # Consume battery
-        cost = self._battery_cost_for_action(using_left, using_right, using_camera)
+        count = int(using_left) + int(using_right) + int(using_camera)
+        cost = self.battery_consumption_map[count]
         self.battery = max(0, self.battery - cost)
         
         # Progress animatronic movements
@@ -219,7 +213,8 @@ class FNAFEnv(gym.Env):
         info = {}
         
         if dead:
-            reward = -1.0  # Penalty for dying
+            # Penalty for dying
+            reward = -1.0 
             terminated = True
             info['killed_by'] = killer
         else:
@@ -235,7 +230,7 @@ class FNAFEnv(gym.Env):
         return obs, reward, terminated, truncated, info
     
     def _get_obs(self) -> np.ndarray:
-        """Get current observation as a numpy array."""
+        '''Get current observation as a numpy array'''
         obs = []
         
         # Timestep and battery (normalized)
@@ -253,7 +248,7 @@ class FNAFEnv(gym.Env):
             obs.append(0.0 if anim.in_office else 1.0)
             obs.append(1.0 if anim.focused else 0.0)
         
-        return np.array(obs, dtype=np.float32)
+        return np.array(obs)
     
     def _get_info(self):
         """Get MDP information."""

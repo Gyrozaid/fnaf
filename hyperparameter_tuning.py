@@ -1,40 +1,25 @@
 import os
-import time
 import argparse
 from typing import Dict, Any
 import numpy as np
 import optuna
 import json
-
-import torch
 from stable_baselines3 import DQN, A2C, PPO
 from stable_baselines3.common.monitor import Monitor
 from stable_baselines3.common.evaluation import evaluate_policy
 from stable_baselines3.common.vec_env import DummyVecEnv, VecNormalize
 import matplotlib.pyplot as plt
 
-
 from mdp_def import FNAFEnv, TEST_SEEDS
 
-#EXAMPLE USAGE IN TERMINAL
-#python hyperparameter_tuning.py --algo ppo --n-trials 40 --trial-timesteps 10000 --final-timesteps 300000
-#use --skip-hparam to skip tuning and just evaluate a tuned model. Implemented so you don't have to rerun tuning if eval fails
-#pass in what algo you want to tune, number of trials to tune for, timesteps to tune for, and timesteps for the final evaluation
-#keep trial timesteps lower to save time on training
+DEVICE = "auto"
 
-def make_env(seed: int = 0, max_timesteps=535):
+def make_env(seed: int):
     def _init():
-        env = FNAFEnv(max_timesteps=max_timesteps)
+        env = FNAFEnv()
         env.reset(seed=seed)
         return env
     return _init
-
-def choose_device():
-    if torch.backends.mps.is_available():
-        return "mps"
-    if torch.cuda.is_available():
-        return "cuda"
-    return "cpu"
 
 #evaluate deterministic policies
 def evaluate_model(model, env, n_eval_episodes=5):
@@ -43,9 +28,6 @@ def evaluate_model(model, env, n_eval_episodes=5):
 
 #objective functions
 def objective(trial: optuna.Trial, algo: str, trial_timesteps: int, seed: int):
-
-    
-    device = choose_device()
 
     #standard hyperparams for tuning
     lr = trial.suggest_loguniform("learning_rate", 1e-5, 1e-2)
@@ -62,7 +44,7 @@ def objective(trial: optuna.Trial, algo: str, trial_timesteps: int, seed: int):
 
     model = None
     env = DummyVecEnv([make_env(seed)])
-    env = VecNormalize(env, norm_obs=True, norm_reward=False, clip_obs=10.)
+    env = VecNormalize(env, norm_obs=True, norm_reward=False, clip_obs=10.0)
 
     #create models
     if algo == "dqn":
@@ -84,7 +66,7 @@ def objective(trial: optuna.Trial, algo: str, trial_timesteps: int, seed: int):
             exploration_final_eps=exploration_final_eps,
             policy_kwargs=policy_kwargs,
             verbose=0,
-            device=device
+            device=DEVICE
         )
 
     elif algo == "ppo":
@@ -107,7 +89,7 @@ def objective(trial: optuna.Trial, algo: str, trial_timesteps: int, seed: int):
             ent_coef=ent_coef,
             policy_kwargs=policy_kwargs,
             verbose=0,
-            device=device
+            device=DEVICE
         )
 
     elif algo == "a2c":
@@ -127,14 +109,13 @@ def objective(trial: optuna.Trial, algo: str, trial_timesteps: int, seed: int):
             max_grad_norm=max_grad_norm,
             policy_kwargs=policy_kwargs,
             verbose=0,
-            device=device
+            device=DEVICE
         )
     else:
         raise ValueError(f"Unknown algorithm: {algo}")
 
     #create fnaf env
-    eval_env = FNAFEnv(max_timesteps=535)
-    eval_env = Monitor(eval_env)
+    eval_env = Monitor(FNAFEnv())
 
     #train
     total_steps = 0
@@ -184,12 +165,11 @@ def run_study(algo: str, n_trials: int, trial_timesteps: int, seed: int, study_n
     print(f"  Value: {trial.value}")
     print("  Params: ")
     for k, v in trial.params.items():
-        print(f"    {k}: {v}")
+        print(f" {k}: {v}")
 
     #save hyperparameters
     os.makedirs("hp_results", exist_ok=True)
     outpath = os.path.join("hp_results", f"best_params_{algo}.json")
-    import json
     with open(outpath, "w") as f:
         json.dump({"value": trial.value, "params": trial.params}, f, indent=2)
     print(f"Saved best params to {outpath}")
@@ -209,16 +189,15 @@ def plot_study_progress(study, algo: str):
     plt.title(f"Hyperparameter Tuning Progress ({algo})")
     plt.xlabel("Trial Number")
     plt.ylabel("Best Mean Reward")
-    plt.grid(True)
+    plt.grid()
 
-    outpath = f"hp_results/{algo}_study_progress.jpg"
-    plt.savefig(outpath, format="jpg", dpi=150)
+    outpath = f"hp_results/{algo}_study_progress.png"
+    plt.savefig(outpath)
     plt.close()
 
 
 #train model with the best found hyperparams
 def train_final_with_params(algo: str, params: Dict[str, Any], total_timesteps: int, model_output_path: str):
-    device = choose_device()
     env = Monitor(FNAFEnv(max_timesteps=535))
     if algo == "dqn":
         model = DQN(
@@ -233,7 +212,7 @@ def train_final_with_params(algo: str, params: Dict[str, Any], total_timesteps: 
             exploration_final_eps=params.get("exploration_final_eps", 0.05),
             policy_kwargs=dict(net_arch=_net_from_choice(params.get("net_arch"))),
             verbose=1,
-            device=device
+            device=DEVICE
         )
     elif algo == "ppo":
         model = PPO(
@@ -248,7 +227,7 @@ def train_final_with_params(algo: str, params: Dict[str, Any], total_timesteps: 
             ent_coef=params.get("ent_coef", 0.01),
             policy_kwargs=dict(net_arch=_net_from_choice(params.get("net_arch"))),
             verbose=1,
-            device=device
+            device=DEVICE
         )
     elif algo == "a2c":
         model = A2C(
@@ -261,7 +240,7 @@ def train_final_with_params(algo: str, params: Dict[str, Any], total_timesteps: 
             vf_coef=params.get("vf_coef", 0.5),
             policy_kwargs=dict(net_arch=_net_from_choice(params.get("net_arch"))),
             verbose=1,
-            device=device
+            device=DEVICE
         )
     else:
         raise ValueError("Unknown algo")
@@ -333,6 +312,12 @@ def evaluate_on_test_seeds_path(model_path: str, model_name: str):
 
 #main program
 if __name__ == "__main__":
+
+    #EXAMPLE USAGE IN TERMINAL
+    #python hyperparameter_tuning.py --algo ppo --n-trials 40 --trial-timesteps 10000 --final-timesteps 300000
+    #use --skip-hparam to skip tuning and just evaluate a tuned model. Implemented so you don't have to rerun tuning if eval fails
+    #pass in what algo you want to tune, number of trials to tune for, timesteps to tune for, and timesteps for the final evaluation
+    #keep trial timesteps lower to save time on training
     
     #args
     parser = argparse.ArgumentParser()
