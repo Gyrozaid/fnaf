@@ -18,13 +18,13 @@ def train_dqn(env, total_timesteps):
         "MlpPolicy",
         learning_rate = 0.00020311910371188509,
         gamma = 0.9608865177479774,
-        net_arch = [256, 256],
+        policy_kwargs = dict(net_arch=[256, 256]),
         batch_size = 32,
         buffer_size = 100000,
         target_update_interval = 258,
         exploration_fraction = 0.2680255936799418,
-        exploration_final_eps = 0.12320837707847854
-        env,
+        exploration_final_eps = 0.12320837707847854,
+        env=env,
         verbose=1,
         tensorboard_log="./tensorboard_logs/",
         device=DEVICE
@@ -49,10 +49,10 @@ def train_a2c(env, total_timesteps):
 
     model = A2C(
         "MlpPolicy",
-        env,
+        env=env,
         learning_rate = 0.0003898034895288209,
         gamma = 0.9544658648241585,
-        net_arch = [128, 128],
+        policy_kwargs = dict(net_arch=[128, 128]),
         n_steps = 50,
         ent_coef = 0.00014417404067605557,
         vf_coef = 0.7164978529477865,
@@ -83,13 +83,13 @@ def train_ppo(env, total_timesteps):
         "MlpPolicy",
         learning_rate = 0.0038842777547031426,
         gamma = 0.9811025765286951,
-        net_arch = [128, 128],
+        policy_kwargs = dict(net_arch=[128, 128]),
         n_steps = 2048,
         batch_size = 256,
         n_epochs = 13,
         clip_range = 0.25419343599091215,
-        ent_coef = 0.0009444574254983562
-        env,
+        ent_coef = 0.0009444574254983562,
+        env=env,
         verbose=1,
         tensorboard_log="./tensorboard_logs/",
         device=DEVICE
@@ -178,7 +178,7 @@ def compare_all_methods():
         reward, length = run_heuristic(seed)
         heuristic_rewards.append(reward)
         heuristic_lengths.append(length)
-        print(f"  Episode {i + 1} (seed={seed}): Reward = {reward:.2f}, Length = {length}")
+        # print(f"  Episode {i + 1} (seed={seed}): Reward = {reward:.2f}, Length = {length}")
     
     results.append({
         'name': 'Heuristic',
@@ -197,14 +197,22 @@ def compare_all_methods():
     # i.e. opening doors, using camera, etc.
     # Also what is happening in the enviornment i.e. where each animatronic is, and if they are being focused by the camera or not, etc.
     RENDER_MODE = None
-    dqn_model = DQN.load("models/fnaf_dqn")
-    results.append(evaluate_on_test_seeds(dqn_model, "DQN", RENDER_MODE))
 
+    #Hyperparameter-tuned models
+    dqn_model = DQN.load("models/fnaf_dqn")
+    results.append(evaluate_on_test_seeds(dqn_model, "DQN_tuned", RENDER_MODE))
     a2c_model = A2C.load("models/fnaf_a2c")
-    results.append(evaluate_on_test_seeds(a2c_model, "A2C", RENDER_MODE))
-    
+    results.append(evaluate_on_test_seeds(a2c_model, "A2C_tuned", RENDER_MODE))
     ppo_model = PPO.load("models/fnaf_ppo")
-    results.append(evaluate_on_test_seeds(ppo_model, "PPO", RENDER_MODE))
+    results.append(evaluate_on_test_seeds(ppo_model, "PPO_tuned", RENDER_MODE))
+
+    #Default hyperparameter models:
+    default_dqn_model = DQN.load("models/fnaf_dqn_default")
+    results.append(evaluate_on_test_seeds(default_dqn_model, "DQN_default", RENDER_MODE))
+    default_a2c_model = A2C.load("models/fnaf_a2c_default")
+    results.append(evaluate_on_test_seeds(default_a2c_model, "A2C_default", RENDER_MODE))
+    default_ppo_model = PPO.load("models/fnaf_ppo_default")
+    results.append(evaluate_on_test_seeds(default_ppo_model, "PPO_default", RENDER_MODE))
     
     # Print comparison
     print()
@@ -228,18 +236,84 @@ def plot_comparison(results):
     names = [r['name'] for r in results]
     rewards = [r['rewards'] for r in results]
 
-    plt.figure()
-    bp = plt.boxplot(rewards, tick_labels=names, patch_artist=True)
+    fig, ax = plt.subplots(figsize=(10, 6))
+    bp = ax.boxplot(rewards, tick_labels=names, patch_artist=True)
 
-    for box, color in zip(bp['boxes'], ['lightblue', 'lightgreen', 'lightcoral', 'lightyellow']):
-        box.set_facecolor(color)
+    ax.set_title("Performance Comparison Across Test Seeds")
+    ax.set_xlabel("Method")
+    ax.set_ylabel("Episode Reward")
+    ax.grid(axis='y', alpha=0.3)
 
-    plt.title("Performance Comparison Across Test Seeds")
-    plt.ylabel("Episode Reward")
-    plt.grid(axis='y', alpha=0.3)
+    plt.tight_layout()
     plt.savefig("figs/sb3_comparison.png")
+    plt.close()
 
+def train_default(total_timesteps):
+    """Training all 3 agents on default hyperparameters."""
+    print("")
+    print("Training Default DQN")
+    print("")
 
+    default_dqn_env = Monitor(FNAFEnv(), filename="logs/default_dqn_training.csv")
+    
+    model = DQN(
+        "MlpPolicy",
+        env=default_dqn_env,
+        verbose=1,
+        tensorboard_log="./tensorboard_logs/",
+        device=DEVICE
+    )
+    
+    # Train
+    model.learn(total_timesteps=total_timesteps, progress_bar=True)
+    # Save
+    model.save("models/fnaf_dqn_default")
+    print()
+    print("Model saved to models/fnaf_dqn_default.zip")
+
+    # A2C AGENT
+    print("")
+    print("Training Default A2C")
+    print("")
+
+    default_a2c_env = Monitor(FNAFEnv(), filename="logs/default_a2c_training.csv")
+
+    model = A2C(
+        "MlpPolicy",
+        env=default_a2c_env,
+        verbose=1,
+        tensorboard_log="./tensorboard_logs/",
+        device=DEVICE 
+    )
+    
+    # Train
+    model.learn(total_timesteps=total_timesteps, progress_bar=True)
+    # Save
+    model.save("models/fnaf_a2c_default")
+    print()
+    print("Model saved to models/fnaf_a2c_default.zip")
+
+    # Training Default PPO Agent
+    print()
+    print("Training PPO")
+    print()
+
+    default_ppo_env = Monitor(FNAFEnv(), filename="logs/default_ppo_training.csv")
+    
+    model = PPO(
+        "MlpPolicy",
+        env=default_ppo_env,
+        verbose=1,
+        tensorboard_log="./tensorboard_logs/",
+        device=DEVICE
+    )
+    
+    # Train
+    model.learn(total_timesteps=total_timesteps, progress_bar=True)
+    # Save
+    model.save("models/fnaf_ppo_default")
+    print()
+    print("Model saved to models/fnaf_ppo_default.zip")
 
 if __name__ == "__main__":
     TRAINING_TIMESTEPS = 500000
@@ -253,11 +327,14 @@ if __name__ == "__main__":
     # TRAINING
     # Comment out any model you don't wish to train, training will only overwrite the currently saved model AFTER completion.
 
-    train_dqn(dqn_env, TRAINING_TIMESTEPS)
-    train_a2c(a2c_env, TRAINING_TIMESTEPS)
-    train_ppo(ppo_env, TRAINING_TIMESTEPS)
+    # train_dqn(dqn_env, TRAINING_TIMESTEPS)
+    # train_a2c(a2c_env, TRAINING_TIMESTEPS)
+    # train_ppo(ppo_env, TRAINING_TIMESTEPS)
+
+    # train_default(TRAINING_TIMESTEPS)
     
     # EVALUATION
+    # REQUIRES all models to be trained to run (dqn, a2c and ppo models for both default and tuned models)
     # Runs all of the trained agents on a small list of random seeds to ensure consistency.
     # The average return and episode length is returned for each algorithm.
     
