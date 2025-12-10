@@ -31,7 +31,7 @@ def train_dqn(env, total_timesteps):
     )
     
     # Train
-    model.learn(total_timesteps=total_timesteps, progress_bar=True)
+    model.learn(total_timesteps=total_timesteps, tb_log_name="DQN_tuned", progress_bar=True)
     
     # Save
     model.save("models/fnaf_dqn")
@@ -63,7 +63,7 @@ def train_a2c(env, total_timesteps):
     )
     
     # Train
-    model.learn(total_timesteps=total_timesteps, progress_bar=True)
+    model.learn(total_timesteps=total_timesteps, tb_log_name="A2C_tuned", progress_bar=True)
     
     # Save
     model.save("models/fnaf_a2c")
@@ -96,7 +96,7 @@ def train_ppo(env, total_timesteps):
     )
     
     # Train
-    model.learn(total_timesteps=total_timesteps, progress_bar=True)
+    model.learn(total_timesteps=total_timesteps, tb_log_name="PPO_tuned", progress_bar=True)
     
     # Save
     model.save("models/fnaf_ppo")
@@ -265,7 +265,7 @@ def train_default(total_timesteps):
     )
     
     # Train
-    model.learn(total_timesteps=total_timesteps, progress_bar=True)
+    model.learn(total_timesteps=total_timesteps, tb_log_name="DQN_default", progress_bar=True)
     # Save
     model.save("models/fnaf_dqn_default")
     print()
@@ -287,7 +287,7 @@ def train_default(total_timesteps):
     )
     
     # Train
-    model.learn(total_timesteps=total_timesteps, progress_bar=True)
+    model.learn(total_timesteps=total_timesteps, tb_log_name="A2C_default", progress_bar=True)
     # Save
     model.save("models/fnaf_a2c_default")
     print()
@@ -309,7 +309,7 @@ def train_default(total_timesteps):
     )
     
     # Train
-    model.learn(total_timesteps=total_timesteps, progress_bar=True)
+    model.learn(total_timesteps=total_timesteps, tb_log_name="PPO_default", progress_bar=True)
     # Save
     model.save("models/fnaf_ppo_default")
     print()
@@ -327,11 +327,11 @@ if __name__ == "__main__":
     # TRAINING
     # Comment out any model you don't wish to train, training will only overwrite the currently saved model AFTER completion.
 
-    # train_dqn(dqn_env, TRAINING_TIMESTEPS)
-    # train_a2c(a2c_env, TRAINING_TIMESTEPS)
-    # train_ppo(ppo_env, TRAINING_TIMESTEPS)
+    train_dqn(dqn_env, TRAINING_TIMESTEPS)
+    train_a2c(a2c_env, TRAINING_TIMESTEPS)
+    train_ppo(ppo_env, TRAINING_TIMESTEPS)
 
-    # train_default(TRAINING_TIMESTEPS)
+    train_default(TRAINING_TIMESTEPS)
     
     # EVALUATION
     # REQUIRES all models to be trained to run (dqn, a2c and ppo models for both default and tuned models)
