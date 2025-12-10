@@ -7,7 +7,7 @@ models/
 logs/a2c_training.csv.monitor.csv
 logs/dqn_training.csv.monitor.csv
 logs/ppo_training.csv.monitor.csv
-optuna_tmp/
+optuna_tmp
 logs/default_dqn_training.csv.monitor.csv
 logs/default_a2c_training.csv.monitor.csv
 logs/default_ppo_training.csv.monitor.csv
